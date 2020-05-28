@@ -64,12 +64,26 @@ DBWrapper::StartService() {
 
     StringHelpFunctions::SplitStringByDelimeter(db_slave_path, ";", opt.meta_.slave_paths_);
 
+    s = config.GetStorageConfigFileCleanupTimeup(opt.file_cleanup_timeout_);
+    if (!s.ok()) {
+        std::cerr << s.ToString() << std::endl;
+        return s;
+    }
+
     // cache config
     s = config.GetCacheConfigCacheInsertData(opt.insert_cache_immediately_);
     if (!s.ok()) {
         std::cerr << s.ToString() << std::endl;
         return s;
     }
+
+    int64_t insert_buffer_size = 1 * engine::GB;
+    s = config.GetCacheConfigInsertBufferSize(insert_buffer_size);
+    if (!s.ok()) {
+        std::cerr << s.ToString() << std::endl;
+        return s;
+    }
+    opt.insert_buffer_size_ = insert_buffer_size * engine::GB;
 
     std::string mode;
     s = config.GetServerConfigDeployMode(mode);
@@ -131,7 +145,7 @@ DBWrapper::StartService() {
 
     if (omp_thread > 0) {
         omp_set_num_threads(omp_thread);
-        SERVER_LOG_DEBUG << "Specify openmp thread number: " << omp_thread;
+        LOG_SERVER_DEBUG_ << "Specify openmp thread number: " << omp_thread;
     } else {
         int64_t sys_thread_cnt = 8;
         if (CommonUtil::GetSystemAvailableThreads(sys_thread_cnt)) {
@@ -197,24 +211,24 @@ DBWrapper::StartService() {
         db_ = engine::DBFactory::Build(opt);
     } catch (std::exception& ex) {
         std::cerr << "Error: failed to open database: " << ex.what()
-                  << ". Possible reason: Meta Tables schema is damaged "
+                  << ". Possible reason: out of storage, meta schema is damaged "
                   << "or created by in-compatible Milvus version." << std::endl;
         kill(0, SIGUSR1);
     }
 
     db_->Start();
 
-    // preload table
-    std::string preload_tables;
-    s = config.GetDBConfigPreloadTable(preload_tables);
+    // preload collection
+    std::string preload_collections;
+    s = config.GetDBConfigPreloadCollection(preload_collections);
     if (!s.ok()) {
         std::cerr << s.ToString() << std::endl;
         return s;
     }
 
-    s = PreloadTables(preload_tables);
+    s = PreloadCollections(preload_collections);
     if (!s.ok()) {
-        std::cerr << "ERROR! Failed to preload tables: " << preload_tables << std::endl;
+        std::cerr << "ERROR! Failed to preload tables: " << preload_collections << std::endl;
         std::cerr << s.ToString() << std::endl;
         kill(0, SIGUSR1);
     }
@@ -232,25 +246,25 @@ DBWrapper::StopService() {
 }
 
 Status
-DBWrapper::PreloadTables(const std::string& preload_tables) {
-    if (preload_tables.empty()) {
+DBWrapper::PreloadCollections(const std::string& preload_collections) {
+    if (preload_collections.empty()) {
         // do nothing
-    } else if (preload_tables == "*") {
+    } else if (preload_collections == "*") {
         // load all tables
-        std::vector<engine::meta::TableSchema> table_schema_array;
-        db_->AllTables(table_schema_array);
+        std::vector<engine::meta::CollectionSchema> table_schema_array;
+        db_->AllCollections(table_schema_array);
 
         for (auto& schema : table_schema_array) {
-            auto status = db_->PreloadTable(schema.table_id_);
+            auto status = db_->PreloadCollection(schema.collection_id_);
             if (!status.ok()) {
                 return status;
             }
         }
     } else {
-        std::vector<std::string> table_names;
-        StringHelpFunctions::SplitStringByDelimeter(preload_tables, ",", table_names);
-        for (auto& name : table_names) {
-            auto status = db_->PreloadTable(name);
+        std::vector<std::string> collection_names;
+        StringHelpFunctions::SplitStringByDelimeter(preload_collections, ",", collection_names);
+        for (auto& name : collection_names) {
+            auto status = db_->PreloadCollection(name);
             if (!status.ok()) {
                 return status;
             }

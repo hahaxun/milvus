@@ -26,19 +26,20 @@
 #include "utils/TimeRecorder.h"
 #include "utils/ValidationUtil.h"
 
-#ifdef MILVUS_ENABLE_PROFILING
+#ifdef ENABLE_CPU_PROFILING
 #include <gperftools/profiler.h>
 #endif
 
 namespace milvus {
 namespace server {
 
-SearchByIDRequest::SearchByIDRequest(const std::shared_ptr<Context>& context, const std::string& table_name,
-                                     int64_t vector_id, int64_t topk, const milvus::json& extra_params,
+SearchByIDRequest::SearchByIDRequest(const std::shared_ptr<milvus::server::Context>& context,
+                                     const std::string& collection_name, const std::vector<int64_t>& id_array,
+                                     int64_t topk, const milvus::json& extra_params,
                                      const std::vector<std::string>& partition_list, TopKQueryResult& result)
-    : BaseRequest(context, DQL_REQUEST_GROUP),
-      table_name_(table_name),
-      vector_id_(vector_id),
+    : BaseRequest(context, BaseRequest::kSearchByID),
+      collection_name_(collection_name),
+      id_array_(id_array),
       topk_(topk),
       extra_params_(extra_params),
       partition_list_(partition_list),
@@ -46,104 +47,80 @@ SearchByIDRequest::SearchByIDRequest(const std::shared_ptr<Context>& context, co
 }
 
 BaseRequestPtr
-SearchByIDRequest::Create(const std::shared_ptr<Context>& context, const std::string& table_name, int64_t vector_id,
-                          int64_t topk, const milvus::json& extra_params,
+SearchByIDRequest::Create(const std::shared_ptr<milvus::server::Context>& context, const std::string& collection_name,
+                          const std::vector<int64_t>& id_array, int64_t topk, const milvus::json& extra_params,
                           const std::vector<std::string>& partition_list, TopKQueryResult& result) {
     return std::shared_ptr<BaseRequest>(
-        new SearchByIDRequest(context, table_name, vector_id, topk, extra_params, partition_list, result));
+        new SearchByIDRequest(context, collection_name, id_array, topk, extra_params, partition_list, result));
 }
 
 Status
 SearchByIDRequest::OnExecute() {
     try {
-        auto pre_query_ctx = context_->Child("Pre query");
+        milvus::server::ContextChild pre_tracer(context_, "Pre query");
 
-        std::string hdr = "SearchByIDRequest(table=" + table_name_ + ", id=" + std::to_string(vector_id_) +
-                          ", k=" + std::to_string(topk_) + ", extra_params=" + extra_params_.dump() + ")";
+        std::string hdr = "SearchByIDRequest(collection=" + collection_name_ + ", k=" + std::to_string(topk_) +
+                          ", extra_params=" + extra_params_.dump() + ")";
 
         TimeRecorder rc(hdr);
 
-        // step 1: check empty id
+        // step 1: check empty id array
+        if (id_array_.empty()) {
+            return Status(SERVER_INVALID_ARGUMENT, "No vector id specified");
+        }
 
-        // step 2: check table name
-        auto status = ValidationUtil::ValidateTableName(table_name_);
+        // step 2: check collection name
+        auto status = ValidationUtil::ValidateCollectionName(collection_name_);
         if (!status.ok()) {
             return status;
         }
 
-        // step 3: check table existence
-        // only process root table, ignore partition table
-        engine::meta::TableSchema table_schema;
-        table_schema.table_id_ = table_name_;
-        status = DBWrapper::DB()->DescribeTable(table_schema);
+        // step 3: check search topk
+        status = ValidationUtil::ValidateSearchTopk(topk_);
+        if (!status.ok()) {
+            return status;
+        }
+
+        // step 4: check collection existence
+        // only process root collection, ignore partition collection
+        engine::meta::CollectionSchema collection_schema;
+        collection_schema.collection_id_ = collection_name_;
+        status = DBWrapper::DB()->DescribeCollection(collection_schema);
         if (!status.ok()) {
             if (status.code() == DB_NOT_FOUND) {
-                return Status(SERVER_TABLE_NOT_EXIST, TableNotExistMsg(table_name_));
+                return Status(SERVER_COLLECTION_NOT_EXIST, CollectionNotExistMsg(collection_name_));
             } else {
                 return status;
             }
         } else {
-            if (!table_schema.owner_table_.empty()) {
-                return Status(SERVER_INVALID_TABLE_NAME, TableNotExistMsg(table_name_));
+            if (!collection_schema.owner_collection_.empty()) {
+                return Status(SERVER_INVALID_COLLECTION_NAME, CollectionNotExistMsg(collection_name_));
             }
         }
 
-        status = ValidationUtil::ValidateSearchParams(extra_params_, table_schema, topk_);
-        if (!status.ok()) {
-            return status;
-        }
-
-        // Check whether GPU search resource is enabled
-#ifdef MILVUS_GPU_VERSION
-        Config& config = Config::GetInstance();
-        bool gpu_enable;
-        config.GetGpuResourceConfigEnable(gpu_enable);
-        if (gpu_enable) {
-            std::vector<int64_t> search_resources;
-            config.GetGpuResourceConfigSearchResources(search_resources);
-            if (!search_resources.empty()) {
-                std::string err_msg = "SearchByID cannot be executed on GPU";
-                SERVER_LOG_ERROR << err_msg;
-                return Status(SERVER_UNSUPPORTED_ERROR, err_msg);
-            }
-        }
-#endif
-
-        // Check table's index type supports search by id
-        if (table_schema.engine_type_ != (int32_t)engine::EngineType::FAISS_IDMAP &&
-            table_schema.engine_type_ != (int32_t)engine::EngineType::FAISS_BIN_IDMAP &&
-            table_schema.engine_type_ != (int32_t)engine::EngineType::FAISS_IVFFLAT &&
-            table_schema.engine_type_ != (int32_t)engine::EngineType::FAISS_BIN_IVFFLAT &&
-            table_schema.engine_type_ != (int32_t)engine::EngineType::FAISS_IVFSQ8) {
-            std::string err_msg =
-                "Index type " + std::to_string(table_schema.engine_type_) + " does not support SearchByID operation";
-            SERVER_LOG_ERROR << err_msg;
-            return Status(SERVER_UNSUPPORTED_ERROR, err_msg);
-        }
-
-        // step 4: check search parameter
-        status = ValidationUtil::ValidateSearchTopk(topk_, table_schema);
+        // step 5: check search parameters
+        status = ValidationUtil::ValidateSearchParams(extra_params_, collection_schema, topk_);
         if (!status.ok()) {
             return status;
         }
 
         rc.RecordSection("check validation");
 
-        // step 5: search vectors
+        // step 6: search vectors
         engine::ResultIds result_ids;
         engine::ResultDistances result_distances;
 
-#ifdef MILVUS_ENABLE_PROFILING
+#ifdef ENABLE_CPU_PROFILING
         std::string fname = "/tmp/search_by_id_" + CommonUtil::GetCurrentTimeStr() + ".profiling";
         ProfilerStart(fname.c_str());
 #endif
 
-        pre_query_ctx->GetTraceContext()->GetSpan()->Finish();
+        pre_tracer.Finish();
 
-        status = DBWrapper::DB()->QueryByID(context_, table_name_, partition_list_, (size_t)topk_, extra_params_,
-                                            vector_id_, result_ids, result_distances);
+        status = DBWrapper::DB()->QueryByIDs(context_, collection_name_, partition_list_, (size_t)topk_, extra_params_,
+                                             id_array_, result_ids, result_distances);
 
-#ifdef MILVUS_ENABLE_PROFILING
+#ifdef ENABLE_CPU_PROFILING
         ProfilerStop();
 #endif
 
@@ -153,19 +130,15 @@ SearchByIDRequest::OnExecute() {
         }
 
         if (result_ids.empty()) {
-            return Status::OK();  // empty table
+            return Status::OK();  // empty collection
         }
 
-        auto post_query_ctx = context_->Child("Constructing result");
-
         // step 7: construct result array
-        result_.row_num_ = 1;
-        result_.distance_list_ = result_distances;
-        result_.id_list_ = result_ids;
+        milvus::server::ContextChild tracer(context_, "Constructing result");
+        result_.row_num_ = id_array_.size();
+        result_.distance_list_.swap(result_distances);
+        result_.id_list_.swap(result_ids);
 
-        post_query_ctx->GetTraceContext()->GetSpan()->Finish();
-
-        // step 8: print time cost percent
         rc.RecordSection("construct result and send");
         rc.ElapseFromBegin("totally cost");
     } catch (std::exception& ex) {

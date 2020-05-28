@@ -36,13 +36,13 @@ class GrpcClient {
     virtual ~GrpcClient();
 
     Status
-    CreateTable(const grpc::TableSchema& table_schema);
+    CreateCollection(const grpc::CollectionSchema& collection_schema);
 
     bool
-    HasTable(const grpc::TableName& table_name, Status& status);
+    HasCollection(const grpc::CollectionName& collection_name, Status& status);
 
     Status
-    DropTable(const grpc::TableName& table_name);
+    DropCollection(const grpc::CollectionName& collection_name);
 
     Status
     CreateIndex(const grpc::IndexParam& index_param);
@@ -51,58 +51,77 @@ class GrpcClient {
     Insert(const grpc::InsertParam& insert_param, grpc::VectorIds& vector_ids);
 
     Status
-    GetVectorByID(const grpc::VectorIdentity& vector_identity, ::milvus::grpc::VectorData& vector_data);
+    GetEntityByID(const grpc::VectorsIdentity& vectors_identity, ::milvus::grpc::VectorsData& vectors_data);
 
     Status
-    GetIDsInSegment(const grpc::GetVectorIDsParam& param, grpc::VectorIds& vector_ids);
+    ListIDInSegment(const grpc::GetVectorIDsParam& param, grpc::VectorIds& vector_ids);
 
     Status
     Search(const grpc::SearchParam& search_param, ::milvus::grpc::TopKQueryResult& topk_query_result);
 
     Status
-    DescribeTable(const std::string& table_name, grpc::TableSchema& grpc_schema);
+    GetCollectionInfo(const std::string& collection_name, grpc::CollectionSchema& grpc_schema);
 
     int64_t
-    CountTable(grpc::TableName& table_name, Status& status);
+    CountEntities(grpc::CollectionName& collection_name, Status& status);
 
     Status
-    ShowTables(milvus::grpc::TableNameList& table_name_list);
+    ListCollections(milvus::grpc::CollectionNameList& collection_name_list);
 
     Status
-    ShowTableInfo(grpc::TableName& table_name, grpc::TableInfo& table_info);
+    GetCollectionStats(grpc::CollectionName& collection_name, grpc::CollectionInfo& collection_stats);
 
     Status
     Cmd(const std::string& cmd, std::string& result);
 
     Status
-    DeleteByID(grpc::DeleteByIDParam& delete_by_id_param);
+    DeleteEntityByID(grpc::DeleteByIDParam& delete_by_id_param);
 
     Status
-    PreloadTable(grpc::TableName& table_name);
+    LoadCollection(grpc::CollectionName& collection_name);
 
     Status
-    DescribeIndex(grpc::TableName& table_name, grpc::IndexParam& index_param);
+    GetIndexInfo(grpc::CollectionName& collection_name, grpc::IndexParam& index_param);
 
     Status
-    DropIndex(grpc::TableName& table_name);
+    DropIndex(grpc::CollectionName& collection_name);
 
     Status
     CreatePartition(const grpc::PartitionParam& partition_param);
 
+    bool
+    HasPartition(const grpc::PartitionParam& partition_param, Status& status) const;
+
     Status
-    ShowPartitions(const grpc::TableName& table_name, grpc::PartitionList& partition_array) const;
+    ListPartitions(const grpc::CollectionName& collection_name, grpc::PartitionList& partition_array) const;
 
     Status
     DropPartition(const ::milvus::grpc::PartitionParam& partition_param);
 
     Status
-    Flush(const std::string& table_name);
+    Flush(const std::string& collection_name);
 
     Status
-    Compact(milvus::grpc::TableName& table_name);
+    Compact(milvus::grpc::CollectionName& collection_name);
 
     Status
     Disconnect();
+
+    /*******************************New Interface**********************************/
+    Status
+    CreateHybridCollection(milvus::grpc::Mapping& mapping);
+
+    Status
+    InsertEntities(milvus::grpc::HInsertParam& entities, milvus::grpc::HEntityIDs& ids);
+
+    Status
+    HybridSearchPB(milvus::grpc::HSearchParamPB& search_param, milvus::grpc::HQueryResult& result);
+
+    Status
+    HybridSearch(milvus::grpc::HSearchParam& search_param, milvus::grpc::HQueryResult& result);
+
+    Status
+    GetHEntityByID(milvus::grpc::VectorsIdentity& vectors_identity, milvus::grpc::HEntity& entity);
 
  private:
     std::unique_ptr<grpc::MilvusService::Stub> stub_;

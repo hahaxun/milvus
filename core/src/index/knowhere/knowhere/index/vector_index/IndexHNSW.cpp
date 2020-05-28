@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "faiss/BuilderSuspend.h"
 #include "hnswlib/hnswalg.h"
 #include "hnswlib/space_ip.h"
 #include "hnswlib/space_l2.h"
@@ -28,13 +29,13 @@
 namespace milvus {
 namespace knowhere {
 
-void
-normalize_vector(float* data, float* norm_array, size_t dim) {
-    float norm = 0.0f;
-    for (int i = 0; i < dim; i++) norm += data[i] * data[i];
-    norm = 1.0f / (sqrtf(norm) + 1e-30f);
-    for (int i = 0; i < dim; i++) norm_array[i] = data[i] * norm;
-}
+// void
+// normalize_vector(float* data, float* norm_array, size_t dim) {
+//     float norm = 0.0f;
+//     for (int i = 0; i < dim; i++) norm += data[i] * data[i];
+//     norm = 1.0f / (sqrtf(norm) + 1e-30f);
+//     for (int i = 0; i < dim; i++) norm_array[i] = data[i] * norm;
+// }
 
 BinarySet
 IndexHNSW::Serialize(const Config& config) {
@@ -45,8 +46,7 @@ IndexHNSW::Serialize(const Config& config) {
     try {
         MemoryIOWriter writer;
         index_->saveIndex(writer);
-        auto data = std::make_shared<uint8_t>();
-        data.reset(writer.data_);
+        std::shared_ptr<uint8_t[]> data(writer.data_);
 
         BinarySet res_set;
         res_set.Append("HNSW", data, writer.total);
@@ -69,7 +69,7 @@ IndexHNSW::Load(const BinarySet& index_binary) {
         index_ = std::make_shared<hnswlib::HierarchicalNSW<float>>(space);
         index_->loadIndex(reader);
 
-        normalize = index_->metric_type_ == 1 ? true : false;  // 1 == InnerProduct
+        normalize = index_->metric_type_ == 1;  // 1 == InnerProduct
     } catch (std::exception& e) {
         KNOWHERE_THROW_MSG(e.what());
     }
@@ -77,17 +77,21 @@ IndexHNSW::Load(const BinarySet& index_binary) {
 
 void
 IndexHNSW::Train(const DatasetPtr& dataset_ptr, const Config& config) {
-    GETTENSOR(dataset_ptr)
+    try {
+        GETTENSOR(dataset_ptr)
 
-    hnswlib::SpaceInterface<float>* space;
-    if (config[Metric::TYPE] == Metric::L2) {
-        space = new hnswlib::L2Space(dim);
-    } else if (config[Metric::TYPE] == Metric::IP) {
-        space = new hnswlib::InnerProductSpace(dim);
-        normalize = true;
+        hnswlib::SpaceInterface<float>* space;
+        if (config[Metric::TYPE] == Metric::L2) {
+            space = new hnswlib::L2Space(dim);
+        } else if (config[Metric::TYPE] == Metric::IP) {
+            space = new hnswlib::InnerProductSpace(dim);
+            normalize = true;
+        }
+        index_ = std::make_shared<hnswlib::HierarchicalNSW<float>>(space, rows, config[IndexParams::M].get<int64_t>(),
+                                                                   config[IndexParams::efConstruction].get<int64_t>());
+    } catch (std::exception& e) {
+        KNOWHERE_THROW_MSG(e.what());
     }
-    index_ = std::make_shared<hnswlib::HierarchicalNSW<float>>(space, rows, config[IndexParams::M].get<int64_t>(),
-                                                               config[IndexParams::efConstruction].get<int64_t>());
 }
 
 void
@@ -121,6 +125,7 @@ IndexHNSW::Add(const DatasetPtr& dataset_ptr, const Config& config) {
     index_->addPoint(p_data, p_ids[0]);
 #pragma omp parallel for
     for (int i = 1; i < rows; ++i) {
+        faiss::BuilderSuspend::check_wait();
         index_->addPoint(((float*)p_data + Dim() * i), p_ids[i]);
     }
 }
@@ -132,8 +137,9 @@ IndexHNSW::Query(const DatasetPtr& dataset_ptr, const Config& config) {
     }
     GETTENSOR(dataset_ptr)
 
-    size_t id_size = sizeof(int64_t) * config[meta::TOPK].get<int64_t>();
-    size_t dist_size = sizeof(float) * config[meta::TOPK].get<int64_t>();
+    size_t k = config[meta::TOPK].get<int64_t>();
+    size_t id_size = sizeof(int64_t) * k;
+    size_t dist_size = sizeof(float) * k;
     auto p_id = (int64_t*)malloc(id_size * rows);
     auto p_dist = (float*)malloc(dist_size * rows);
 
@@ -141,6 +147,8 @@ IndexHNSW::Query(const DatasetPtr& dataset_ptr, const Config& config) {
 
     using P = std::pair<float, int64_t>;
     auto compare = [](const P& v1, const P& v2) { return v1.first < v2.first; };
+
+    faiss::ConcurrentBitsetPtr blacklist = GetBlacklist();
 #pragma omp parallel for
     for (unsigned int i = 0; i < rows; ++i) {
         std::vector<P> ret;
@@ -153,10 +161,10 @@ IndexHNSW::Query(const DatasetPtr& dataset_ptr, const Config& config) {
         // } else {
         //     ret = index_->searchKnn((float*)single_query, config[meta::TOPK].get<int64_t>(), compare);
         // }
-        ret = index_->searchKnn((float*)single_query, config[meta::TOPK].get<int64_t>(), compare);
+        ret = index_->searchKnn((float*)single_query, k, compare, blacklist);
 
-        while (ret.size() < config[meta::TOPK]) {
-            ret.push_back(std::make_pair(-1, -1));
+        while (ret.size() < k) {
+            ret.emplace_back(std::make_pair(-1, -1));
         }
         std::vector<float> dist;
         std::vector<int64_t> ids;
@@ -171,8 +179,8 @@ IndexHNSW::Query(const DatasetPtr& dataset_ptr, const Config& config) {
         std::transform(ret.begin(), ret.end(), std::back_inserter(ids),
                        [](const std::pair<float, int64_t>& e) { return e.second; });
 
-        memcpy(p_dist + i * config[meta::TOPK].get<int64_t>(), dist.data(), dist_size);
-        memcpy(p_id + i * config[meta::TOPK].get<int64_t>(), ids.data(), id_size);
+        memcpy(p_dist + i * k, dist.data(), dist_size);
+        memcpy(p_id + i * k, ids.data(), id_size);
     }
 
     auto ret_ds = std::make_shared<Dataset>();

@@ -26,14 +26,16 @@
 #include "db/Types.h"
 #include "db/meta/MetaTypes.h"
 
+#include "query/GeneralQuery.h"
+
 #include "server/context/Context.h"
 
 namespace milvus {
 namespace scheduler {
 
-using engine::meta::TableFileSchemaPtr;
+using engine::meta::SegmentSchemaPtr;
 
-using Id2IndexMap = std::unordered_map<size_t, TableFileSchemaPtr>;
+using Id2IndexMap = std::unordered_map<size_t, SegmentSchemaPtr>;
 
 using ResultIds = engine::ResultIds;
 using ResultDistances = engine::ResultDistances;
@@ -43,9 +45,13 @@ class SearchJob : public Job {
     SearchJob(const std::shared_ptr<server::Context>& context, uint64_t topk, const milvus::json& extra_params,
               const engine::VectorsData& vectors);
 
+    SearchJob(const std::shared_ptr<server::Context>& context, query::GeneralQueryPtr general_query,
+              query::QueryPtr query_ptr, std::unordered_map<std::string, engine::meta::hybrid::DataType>& attr_type,
+              const engine::VectorsData& vectorsData);
+
  public:
     bool
-    AddIndexFile(const TableFileSchemaPtr& index_file);
+    AddIndexFile(const SegmentSchemaPtr& index_file);
 
     void
     WaitResult();
@@ -99,6 +105,26 @@ class SearchJob : public Job {
         return mutex_;
     }
 
+    query::GeneralQueryPtr
+    general_query() {
+        return general_query_;
+    }
+
+    query::QueryPtr
+    query_ptr() {
+        return query_ptr_;
+    }
+
+    std::unordered_map<std::string, engine::meta::hybrid::DataType>&
+    attr_type() {
+        return attr_type_;
+    }
+
+    uint64_t&
+    vector_count() {
+        return vector_count_;
+    }
+
  private:
     const std::shared_ptr<server::Context> context_;
 
@@ -112,6 +138,11 @@ class SearchJob : public Job {
     ResultIds result_ids_;
     ResultDistances result_distances_;
     Status status_;
+
+    query::GeneralQueryPtr general_query_;
+    query::QueryPtr query_ptr_;
+    std::unordered_map<std::string, engine::meta::hybrid::DataType> attr_type_;
+    uint64_t vector_count_;
 
     std::mutex mutex_;
     std::condition_variable cv_;

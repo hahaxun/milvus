@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "ExecutionEngine.h"
@@ -69,6 +70,14 @@ class ExecutionEngineImpl : public ExecutionEngine {
     GetVectorByID(const int64_t& id, uint8_t* vector, bool hybrid) override;
 
     Status
+    ExecBinaryQuery(query::GeneralQueryPtr general_query, faiss::ConcurrentBitsetPtr& bitset,
+                    std::unordered_map<std::string, DataType>& attr_type, std::string& vector_placeholder) override;
+
+    Status
+    HybridSearch(query::GeneralQueryPtr general_query, std::unordered_map<std::string, DataType>& attr_type,
+                 query::QueryPtr query_ptr, std::vector<float>& distances, std::vector<int64_t>& search_ids) override;
+
+    Status
     Search(int64_t n, const float* data, int64_t k, const milvus::json& extra_params, float* distances, int64_t* labels,
            bool hybrid = false) override;
 
@@ -76,18 +85,11 @@ class ExecutionEngineImpl : public ExecutionEngine {
     Search(int64_t n, const uint8_t* data, int64_t k, const milvus::json& extra_params, float* distances,
            int64_t* labels, bool hybrid = false) override;
 
-    Status
-    Search(int64_t n, const std::vector<int64_t>& ids, int64_t k, const milvus::json& extra_params, float* distances,
-           int64_t* labels, bool hybrid) override;
-
     ExecutionEnginePtr
     BuildIndex(const std::string& location, EngineType engine_type) override;
 
     Status
     Cache() override;
-
-    Status
-    GpuCache(uint64_t gpu_id) override;
 
     Status
     Init() override;
@@ -114,6 +116,10 @@ class ExecutionEngineImpl : public ExecutionEngine {
     knowhere::VecIndexPtr
     Load(const std::string& location);
 
+    template <typename T>
+    void
+    ProcessRangeQuery(std::vector<T> data, T value, query::CompareOperator type, faiss::ConcurrentBitsetPtr& bitset);
+
     void
     HybridLoad() const;
 
@@ -124,6 +130,11 @@ class ExecutionEngineImpl : public ExecutionEngine {
     knowhere::VecIndexPtr index_ = nullptr;
     EngineType index_type_;
     MetricType metric_type_;
+
+    std::unordered_map<std::string, std::vector<uint8_t>> attr_data_;
+    std::unordered_map<std::string, size_t> attr_size_;
+    std::vector<int64_t> entity_ids_;
+    int64_t vector_count_;
 
     int64_t dim_;
     std::string location_;

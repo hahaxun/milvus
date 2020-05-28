@@ -13,8 +13,12 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
+#include <faiss/utils/ConcurrentBitset.h>
+
+#include "query/GeneralQuery.h"
 #include "utils/Json.h"
 #include "utils/Status.h"
 
@@ -35,7 +39,8 @@ enum class EngineType {
     FAISS_BIN_IDMAP,
     FAISS_BIN_IVFFLAT,
     HNSW,
-    MAX_VALUE = HNSW,
+    ANNOY,
+    MAX_VALUE = ANNOY,
 };
 
 enum class MetricType {
@@ -47,6 +52,23 @@ enum class MetricType {
     SUBSTRUCTURE = 6,    // Substructure Distance
     SUPERSTRUCTURE = 7,  // Superstructure Distance
     MAX_VALUE = SUPERSTRUCTURE
+};
+
+enum class DataType {
+    INT8 = 1,
+    INT16 = 2,
+    INT32 = 3,
+    INT64 = 4,
+
+    STRING = 20,
+
+    BOOL = 30,
+
+    FLOAT = 40,
+    DOUBLE = 41,
+
+    VECTOR = 100,
+    UNKNOWN = 9999,
 };
 
 class ExecutionEngine {
@@ -94,6 +116,14 @@ class ExecutionEngine {
     GetVectorByID(const int64_t& id, uint8_t* vector, bool hybrid) = 0;
 
     virtual Status
+    ExecBinaryQuery(query::GeneralQueryPtr general_query, faiss::ConcurrentBitsetPtr& bitset,
+                    std::unordered_map<std::string, DataType>& attr_type, std::string& vector_placeholder) = 0;
+
+    virtual Status
+    HybridSearch(query::GeneralQueryPtr general_query, std::unordered_map<std::string, DataType>& attr_type,
+                 query::QueryPtr query_ptr, std::vector<float>& distances, std::vector<int64_t>& search_ids) = 0;
+
+    virtual Status
     Search(int64_t n, const float* data, int64_t k, const milvus::json& extra_params, float* distances, int64_t* labels,
            bool hybrid) = 0;
 
@@ -101,18 +131,11 @@ class ExecutionEngine {
     Search(int64_t n, const uint8_t* data, int64_t k, const milvus::json& extra_params, float* distances,
            int64_t* labels, bool hybrid) = 0;
 
-    virtual Status
-    Search(int64_t n, const std::vector<int64_t>& ids, int64_t k, const milvus::json& extra_params, float* distances,
-           int64_t* labels, bool hybrid) = 0;
-
     virtual std::shared_ptr<ExecutionEngine>
     BuildIndex(const std::string& location, EngineType engine_type) = 0;
 
     virtual Status
     Cache() = 0;
-
-    virtual Status
-    GpuCache(uint64_t gpu_id) = 0;
 
     virtual Status
     Init() = 0;

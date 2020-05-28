@@ -20,15 +20,17 @@
 #include <set>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "config/handler/CacheConfigHandler.h"
 #include "config/handler/EngineConfigHandler.h"
 #include "db/DB.h"
 #include "db/IndexFailedChecker.h"
-#include "db/OngoingFileChecker.h"
 #include "db/Types.h"
 #include "db/insert/MemManager.h"
+#include "db/merge/MergeManager.h"
+#include "db/meta/FilesHolder.h"
 #include "utils/ThreadPool.h"
 #include "wal/WalManager.h"
 
@@ -42,108 +44,141 @@ class Meta;
 class DBImpl : public DB, public server::CacheConfigHandler, public server::EngineConfigHandler {
  public:
     explicit DBImpl(const DBOptions& options);
+
     ~DBImpl();
 
     Status
     Start() override;
+
     Status
     Stop() override;
+
     Status
     DropAll() override;
 
     Status
-    CreateTable(meta::TableSchema& table_schema) override;
+    CreateCollection(meta::CollectionSchema& collection_schema) override;
 
     Status
-    DropTable(const std::string& table_id) override;
+    DropCollection(const std::string& collection_id) override;
 
     Status
-    DescribeTable(meta::TableSchema& table_schema) override;
+    DescribeCollection(meta::CollectionSchema& collection_schema) override;
 
     Status
-    HasTable(const std::string& table_id, bool& has_or_not) override;
+    HasCollection(const std::string& collection_id, bool& has_or_not) override;
 
     Status
-    HasNativeTable(const std::string& table_id, bool& has_or_not_) override;
+    HasNativeCollection(const std::string& collection_id, bool& has_or_not_) override;
 
     Status
-    AllTables(std::vector<meta::TableSchema>& table_schema_array) override;
+    AllCollections(std::vector<meta::CollectionSchema>& collection_schema_array) override;
 
     Status
-    GetTableInfo(const std::string& table_id, TableInfo& table_info) override;
+    GetCollectionInfo(const std::string& collection_id, std::string& collection_info) override;
 
     Status
-    PreloadTable(const std::string& table_id) override;
+    PreloadCollection(const std::string& collection_id) override;
 
     Status
-    UpdateTableFlag(const std::string& table_id, int64_t flag) override;
+    UpdateCollectionFlag(const std::string& collection_id, int64_t flag) override;
 
     Status
-    GetTableRowCount(const std::string& table_id, uint64_t& row_count) override;
+    GetCollectionRowCount(const std::string& collection_id, uint64_t& row_count) override;
 
     Status
-    CreatePartition(const std::string& table_id, const std::string& partition_name,
+    CreatePartition(const std::string& collection_id, const std::string& partition_name,
                     const std::string& partition_tag) override;
+
+    Status
+    HasPartition(const std::string& collection_id, const std::string& tag, bool& has_or_not) override;
 
     Status
     DropPartition(const std::string& partition_name) override;
 
     Status
-    DropPartitionByTag(const std::string& table_id, const std::string& partition_tag) override;
+    DropPartitionByTag(const std::string& collection_id, const std::string& partition_tag) override;
 
     Status
-    ShowPartitions(const std::string& table_id, std::vector<meta::TableSchema>& partition_schema_array) override;
+    ShowPartitions(const std::string& collection_id,
+                   std::vector<meta::CollectionSchema>& partition_schema_array) override;
 
     Status
-    InsertVectors(const std::string& table_id, const std::string& partition_tag, VectorsData& vectors) override;
+    InsertVectors(const std::string& collection_id, const std::string& partition_tag, VectorsData& vectors) override;
 
     Status
-    DeleteVector(const std::string& table_id, IDNumber vector_id) override;
+    DeleteVector(const std::string& collection_id, IDNumber vector_id) override;
 
     Status
-    DeleteVectors(const std::string& table_id, IDNumbers vector_ids) override;
+    DeleteVectors(const std::string& collection_id, IDNumbers vector_ids) override;
 
     Status
-    Flush(const std::string& table_id) override;
+    Flush(const std::string& collection_id) override;
 
     Status
     Flush() override;
 
     Status
-    Compact(const std::string& table_id) override;
+    Compact(const std::string& collection_id, double threshold = 0.0) override;
 
     Status
-    GetVectorByID(const std::string& table_id, const IDNumber& vector_id, VectorsData& vector) override;
+    GetVectorsByID(const std::string& collection_id, const IDNumbers& id_array,
+                   std::vector<engine::VectorsData>& vectors) override;
 
     Status
-    GetVectorIDs(const std::string& table_id, const std::string& segment_id, IDNumbers& vector_ids) override;
+    GetEntitiesByID(const std::string& collection_id, const IDNumbers& id_array,
+                    std::vector<engine::VectorsData>& vectors, std::vector<engine::AttrsData>& attrs) override;
+
+    Status
+    GetVectorIDs(const std::string& collection_id, const std::string& segment_id, IDNumbers& vector_ids) override;
 
     //    Status
-    //    Merge(const std::set<std::string>& table_ids) override;
+    //    Merge(const std::set<std::string>& collection_ids) override;
 
     Status
-    CreateIndex(const std::string& table_id, const TableIndex& index) override;
+    CreateIndex(const std::shared_ptr<server::Context>& context, const std::string& collection_id,
+                const CollectionIndex& index) override;
 
     Status
-    DescribeIndex(const std::string& table_id, TableIndex& index) override;
+    DescribeIndex(const std::string& collection_id, CollectionIndex& index) override;
 
     Status
-    DropIndex(const std::string& table_id) override;
+    DropIndex(const std::string& collection_id) override;
 
     Status
-    QueryByID(const std::shared_ptr<server::Context>& context, const std::string& table_id,
-              const std::vector<std::string>& partition_tags, uint64_t k, const milvus::json& extra_params,
-              IDNumber vector_id, ResultIds& result_ids, ResultDistances& result_distances) override;
+    CreateHybridCollection(meta::CollectionSchema& collection_schema,
+                           meta::hybrid::FieldsSchema& fields_schema) override;
 
     Status
-    Query(const std::shared_ptr<server::Context>& context, const std::string& table_id,
+    DescribeHybridCollection(meta::CollectionSchema& collection_schema,
+                             meta::hybrid::FieldsSchema& fields_schema) override;
+
+    Status
+    InsertEntities(const std::string& collection_name, const std::string& partition_tag,
+                   const std::vector<std::string>& field_names, engine::Entity& entity,
+                   std::unordered_map<std::string, meta::hybrid::DataType>& field_types) override;
+
+    Status
+    HybridQuery(const std::shared_ptr<server::Context>& context, const std::string& collection_id,
+                const std::vector<std::string>& partition_tags, query::GeneralQueryPtr general_query,
+                query::QueryPtr query_ptr, std::vector<std::string>& field_names,
+                std::unordered_map<std::string, engine::meta::hybrid::DataType>& attr_type,
+                engine::QueryResult& result) override;
+
+    Status
+    QueryByIDs(const std::shared_ptr<server::Context>& context, const std::string& collection_id,
+               const std::vector<std::string>& partition_tags, uint64_t k, const milvus::json& extra_params,
+               const IDNumbers& id_array, ResultIds& result_ids, ResultDistances& result_distances) override;
+
+    Status
+    Query(const std::shared_ptr<server::Context>& context, const std::string& collection_id,
           const std::vector<std::string>& partition_tags, uint64_t k, const milvus::json& extra_params,
           const VectorsData& vectors, ResultIds& result_ids, ResultDistances& result_distances) override;
 
     Status
-    QueryByFileID(const std::shared_ptr<server::Context>& context, const std::string& table_id,
-                  const std::vector<std::string>& file_ids, uint64_t k, const milvus::json& extra_params,
-                  const VectorsData& vectors, ResultIds& result_ids, ResultDistances& result_distances) override;
+    QueryByFileID(const std::shared_ptr<server::Context>& context, const std::vector<std::string>& file_ids, uint64_t k,
+                  const milvus::json& extra_params, const VectorsData& vectors, ResultIds& result_ids,
+                  ResultDistances& result_distances) override;
 
     Status
     Size(uint64_t& result) override;
@@ -157,18 +192,45 @@ class DBImpl : public DB, public server::CacheConfigHandler, public server::Engi
 
  private:
     Status
-    QueryAsync(const std::shared_ptr<server::Context>& context, const std::string& table_id,
-               const meta::TableFilesSchema& files, uint64_t k, const milvus::json& extra_params,
-               const VectorsData& vectors, ResultIds& result_ids, ResultDistances& result_distances);
+    QueryAsync(const std::shared_ptr<server::Context>& context, meta::FilesHolder& files_holder, uint64_t k,
+               const milvus::json& extra_params, const VectorsData& vectors, ResultIds& result_ids,
+               ResultDistances& result_distances);
 
     Status
-    GetVectorByIdHelper(const std::string& table_id, IDNumber vector_id, VectorsData& vector,
-                        const meta::TableFilesSchema& files);
+    HybridQueryAsync(const std::shared_ptr<server::Context>& context, const std::string& collection_id,
+                     meta::FilesHolder& files_holder, query::GeneralQueryPtr general_query, query::QueryPtr query_ptr,
+                     std::vector<std::string>& field_names,
+                     std::unordered_map<std::string, engine::meta::hybrid::DataType>& attr_type,
+                     engine::QueryResult& result);
+
+    Status
+    GetVectorsByIdHelper(const std::string& collection_id, const IDNumbers& id_array,
+                         std::vector<engine::VectorsData>& vectors, meta::FilesHolder& files_holder);
+
+    Status
+    GetEntitiesByIdHelper(const std::string& collection_id, const IDNumbers& id_array,
+                          std::unordered_map<std::string, engine::meta::hybrid::DataType>& attr_type,
+                          std::vector<engine::VectorsData>& vectors, std::vector<engine::AttrsData>& attrs,
+                          meta::FilesHolder& files_holder);
 
     void
-    BackgroundTimerTask();
+    InternalFlush(const std::string& collection_id = "");
+
+    void
+    BackgroundWalThread();
+
+    void
+    BackgroundFlushThread();
+
+    void
+    BackgroundMetricThread();
+
+    void
+    BackgroundIndexThread();
+
     void
     WaitMergeFileFinish();
+
     void
     WaitBuildIndexFinish();
 
@@ -178,74 +240,78 @@ class DBImpl : public DB, public server::CacheConfigHandler, public server::Engi
     void
     StartMergeTask();
 
-    Status
-    MergeFiles(const std::string& table_id, const meta::TableFilesSchema& files);
-    Status
-    BackgroundMergeFiles(const std::string& table_id);
     void
-    BackgroundMerge(std::set<std::string> table_ids);
+    BackgroundMerge(std::set<std::string> collection_ids);
+
+    Status
+    MergeHybridFiles(const std::string& table_id, meta::FilesHolder& files_holder);
 
     void
-    StartBuildIndexTask(bool force = false);
+    StartBuildIndexTask();
+
     void
     BackgroundBuildIndex();
 
     Status
-    CompactFile(const std::string& table_id, const meta::TableFileSchema& file,
-                meta::TableFilesSchema& files_to_update);
+    CompactFile(const std::string& collection_id, double threshold, const meta::SegmentSchema& file,
+                meta::SegmentsSchema& files_to_update);
 
     /*
     Status
-    SyncMemData(std::set<std::string>& sync_table_ids);
+    SyncMemData(std::set<std::string>& sync_collection_ids);
     */
 
     Status
-    GetFilesToBuildIndex(const std::string& table_id, const std::vector<int>& file_types,
-                         meta::TableFilesSchema& files);
+    GetFilesToBuildIndex(const std::string& collection_id, const std::vector<int>& file_types,
+                         meta::FilesHolder& files_holder);
 
     Status
-    GetFilesToSearch(const std::string& table_id, const std::vector<size_t>& file_ids, meta::TableFilesSchema& files);
+    GetPartitionByTag(const std::string& collection_id, const std::string& partition_tag, std::string& partition_name);
 
     Status
-    GetPartitionByTag(const std::string& table_id, const std::string& partition_tag, std::string& partition_name);
-
-    Status
-    GetPartitionsByTags(const std::string& table_id, const std::vector<std::string>& partition_tags,
+    GetPartitionsByTags(const std::string& collection_id, const std::vector<std::string>& partition_tags,
                         std::set<std::string>& partition_name_array);
 
     Status
-    DropTableRecursively(const std::string& table_id);
+    DropCollectionRecursively(const std::string& collection_id);
 
     Status
-    UpdateTableIndexRecursively(const std::string& table_id, const TableIndex& index);
+    UpdateCollectionIndexRecursively(const std::string& collection_id, const CollectionIndex& index);
 
     Status
-    WaitTableIndexRecursively(const std::string& table_id, const TableIndex& index);
+    WaitCollectionIndexRecursively(const std::shared_ptr<server::Context>& context, const std::string& collection_id,
+                                   const CollectionIndex& index);
 
     Status
-    DropTableIndexRecursively(const std::string& table_id);
+    DropCollectionIndexRecursively(const std::string& collection_id);
 
     Status
-    GetTableRowCountRecursively(const std::string& table_id, uint64_t& row_count);
+    GetCollectionRowCountRecursively(const std::string& collection_id, uint64_t& row_count);
 
     Status
     ExecWalRecord(const wal::MXLogRecord& record);
 
     void
-    BackgroundWalTask();
+    SuspendIfFirst();
+
+    void
+    ResumeIfLast();
 
  private:
     DBOptions options_;
 
     std::atomic<bool> initialized_;
 
-    std::thread bg_timer_thread_;
-
     meta::MetaPtr meta_ptr_;
     MemManagerPtr mem_mgr_;
+    MergeManagerPtr merge_mgr_ptr_;
 
     std::shared_ptr<wal::WalManager> wal_mgr_;
     std::thread bg_wal_thread_;
+
+    std::thread bg_flush_thread_;
+    std::thread bg_metric_thread_;
+    std::thread bg_index_thread_;
 
     struct SimpleWaitNotify {
         bool notified_ = false;
@@ -288,13 +354,18 @@ class DBImpl : public DB, public server::CacheConfigHandler, public server::Engi
         }
     };
 
-    SimpleWaitNotify bg_task_swn_;
-    SimpleWaitNotify flush_task_swn_;
+    SimpleWaitNotify swn_wal_;
+    SimpleWaitNotify swn_flush_;
+    SimpleWaitNotify swn_metric_;
+    SimpleWaitNotify swn_index_;
+
+    SimpleWaitNotify flush_req_swn_;
+    SimpleWaitNotify index_req_swn_;
 
     ThreadPool merge_thread_pool_;
     std::mutex merge_result_mutex_;
     std::list<std::future<void>> merge_thread_results_;
-    std::set<std::string> merge_table_ids_;
+    std::set<std::string> merge_collection_ids_;
 
     ThreadPool index_thread_pool_;
     std::mutex index_result_mutex_;
@@ -305,6 +376,9 @@ class DBImpl : public DB, public server::CacheConfigHandler, public server::Engi
     IndexFailedChecker index_failed_checker_;
 
     std::mutex flush_merge_compact_mutex_;
+
+    int64_t live_search_num_ = 0;
+    std::mutex suspend_build_mutex_;
 };  // DBImpl
 
 }  // namespace engine

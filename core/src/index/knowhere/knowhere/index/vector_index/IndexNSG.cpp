@@ -10,6 +10,7 @@
 // or implied. See the License for the specific language governing permissions and limitations under the License
 
 #include <fiu-local.h>
+#include <string>
 
 #include "knowhere/common/Exception.h"
 #include "knowhere/common/Timer.h"
@@ -43,8 +44,7 @@ NSG::Serialize(const Config& config) {
 
         MemoryIOWriter writer;
         impl::write_index(index, writer);
-        auto data = std::make_shared<uint8_t>();
-        data.reset(writer.data_);
+        std::shared_ptr<uint8_t[]> data(writer.data_);
 
         BinarySet res_set;
         res_set.Append("NSG", data, writer.total);
@@ -87,12 +87,15 @@ NSG::Query(const DatasetPtr& dataset_ptr, const Config& config) {
         auto p_id = (int64_t*)malloc(p_id_size);
         auto p_dist = (float*)malloc(p_dist_size);
 
+        faiss::ConcurrentBitsetPtr blacklist = GetBlacklist();
+
         impl::SearchParams s_params;
         s_params.search_length = config[IndexParams::search_length];
         s_params.k = config[meta::TOPK];
         {
             std::lock_guard<std::mutex> lk(mutex_);
-            index_->Search((float*)p_data, rows, dim, config[meta::TOPK].get<int64_t>(), p_dist, p_id, s_params);
+            index_->Search((float*)p_data, rows, dim, config[meta::TOPK].get<int64_t>(), p_dist, p_id, s_params,
+                           blacklist);
         }
 
         auto ret_ds = std::make_shared<Dataset>();
@@ -139,7 +142,7 @@ NSG::Train(const DatasetPtr& dataset_ptr, const Config& config) {
     auto p_ids = dataset_ptr->Get<const int64_t*>(meta::IDS);
 
     GETTENSOR(dataset_ptr)
-    index_ = std::make_shared<impl::NsgIndex>(dim, rows);
+    index_ = std::make_shared<impl::NsgIndex>(dim, rows, config[Metric::TYPE].get<std::string>());
     index_->SetKnnGraph(knng);
     index_->Build_with_ids(rows, (float*)p_data, (int64_t*)p_ids, b_params);
 }

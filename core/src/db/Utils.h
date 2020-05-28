@@ -26,30 +26,27 @@ int64_t
 GetMicroSecTimeStamp();
 
 Status
-CreateTablePath(const DBMetaOptions& options, const std::string& table_id);
+CreateCollectionPath(const DBMetaOptions& options, const std::string& collection_id);
 Status
-DeleteTablePath(const DBMetaOptions& options, const std::string& table_id, bool force = true);
+DeleteCollectionPath(const DBMetaOptions& options, const std::string& collection_id, bool force = true);
 
 Status
-CreateTableFilePath(const DBMetaOptions& options, meta::TableFileSchema& table_file);
+CreateCollectionFilePath(const DBMetaOptions& options, meta::SegmentSchema& table_file);
 Status
-GetTableFilePath(const DBMetaOptions& options, meta::TableFileSchema& table_file);
+GetCollectionFilePath(const DBMetaOptions& options, meta::SegmentSchema& table_file);
 Status
-DeleteTableFilePath(const DBMetaOptions& options, meta::TableFileSchema& table_file);
+DeleteCollectionFilePath(const DBMetaOptions& options, meta::SegmentSchema& table_file);
 Status
-DeleteSegment(const DBMetaOptions& options, meta::TableFileSchema& table_file);
+DeleteSegment(const DBMetaOptions& options, meta::SegmentSchema& table_file);
 
 Status
 GetParentPath(const std::string& path, std::string& parent_path);
 
 bool
-IsSameIndex(const TableIndex& index1, const TableIndex& index2);
+IsSameIndex(const CollectionIndex& index1, const CollectionIndex& index2);
 
 bool
 IsRawIndexType(int32_t type);
-
-static bool
-IsBinaryIndexType(int32_t index_type);
 
 bool
 IsBinaryMetricType(int32_t metric_type);
@@ -72,6 +69,15 @@ struct MetaUriInfo {
 
 Status
 ParseMetaUri(const std::string& uri, MetaUriInfo& info);
+
+std::string
+GetIndexName(int32_t index_type);
+
+void
+SendExitSignal();
+
+void
+ExitOnWriteError(Status& status);
 
 }  // namespace utils
 }  // namespace engine

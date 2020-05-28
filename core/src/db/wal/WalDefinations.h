@@ -14,6 +14,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "db/Types.h"
 #include "db/meta/MetaTypes.h"
@@ -22,23 +23,29 @@ namespace milvus {
 namespace engine {
 namespace wal {
 
-using TableSchemaPtr = std::shared_ptr<milvus::engine::meta::TableSchema>;
-using TableMetaPtr = std::shared_ptr<std::unordered_map<std::string, TableSchemaPtr> >;
+using TableSchemaPtr = std::shared_ptr<milvus::engine::meta::CollectionSchema>;
+using TableMetaPtr = std::shared_ptr<std::unordered_map<std::string, TableSchemaPtr>>;
 
 #define UNIT_MB (1024 * 1024)
 #define LSN_OFFSET_MASK 0x00000000ffffffff
 
-enum class MXLogType { InsertBinary, InsertVector, Delete, Update, Flush, None };
+enum class MXLogType { None, InsertBinary, InsertVector, Delete, Update, Flush, Entity };
 
 struct MXLogRecord {
     uint64_t lsn;
     MXLogType type;
-    std::string table_id;
+    std::string collection_id;
     std::string partition_tag;
     uint32_t length;
     const IDNumber* ids;
     uint32_t data_size;
     const void* data;
+    std::vector<std::string> field_names;
+    //    std::vector<uint32_t> attrs_size;
+    //    std::vector<const void* > attrs_data;
+    std::unordered_map<std::string, uint64_t> attr_nbytes;
+    std::unordered_map<std::string, uint64_t> attr_data_size;
+    std::unordered_map<std::string, std::vector<uint8_t>> attr_data;
 };
 
 struct MXLogConfiguration {

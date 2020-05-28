@@ -19,6 +19,7 @@
 #include "server/Server.h"
 #include "src/version.h"
 #include "utils/SignalUtil.h"
+#include "utils/Status.h"
 
 INITIALIZE_EASYLOGGINGPP
 
@@ -26,10 +27,10 @@ void
 print_help(const std::string& app_name) {
     std::cout << std::endl << "Usage: " << app_name << " [OPTIONS]" << std::endl << std::endl;
     std::cout << "  Options:" << std::endl;
-    std::cout << "   -h --help                 Print this help" << std::endl;
-    std::cout << "   -c --conf_file filename   Read configuration from the file" << std::endl;
-    std::cout << "   -d --daemon               Daemonize this application" << std::endl;
-    std::cout << "   -p --pid_file  filename   PID file used by daemonized app" << std::endl;
+    std::cout << "   -h --help                 Print this help." << std::endl;
+    std::cout << "   -c --conf_file filename   Read configuration from the file." << std::endl;
+    std::cout << "   -d --daemon               Daemonize this application." << std::endl;
+    std::cout << "   -p --pid_file  filename   PID file used by daemonized app." << std::endl;
     std::cout << std::endl;
 }
 
@@ -41,7 +42,7 @@ print_banner() {
     std::cout << "  / /|_/ // // /_| |/ / /_/ /\\ \\    " << std::endl;
     std::cout << " /_/  /_/___/____/___/\\____/___/     " << std::endl;
     std::cout << std::endl;
-    std::cout << "Welcome to Milvus!" << std::endl;
+    std::cout << "Welcome to use Milvus!" << std::endl;
     std::cout << "Milvus " << BUILD_TYPE << " version: v" << MILVUS_VERSION << ", built at " << BUILD_TIME << ", with "
 #ifdef WITH_MKL
               << "MKL"
@@ -75,9 +76,9 @@ main(int argc, char* argv[]) {
     std::string config_filename, log_config_file;
     std::string pid_filename;
     std::string app_name = argv[0];
+    milvus::Status s;
 
     milvus::server::Server& server = milvus::server::Server::GetInstance();
-    milvus::Status s;
 
     if (argc < 2) {
         print_help(app_name);
@@ -137,6 +138,7 @@ main(int argc, char* argv[]) {
     if (s.ok()) {
         std::cout << "Milvus server started successfully!" << std::endl;
     } else {
+        std::cout << s.message() << std::endl;
         goto FAIL;
     }
 

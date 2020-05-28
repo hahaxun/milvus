@@ -13,9 +13,12 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "context/HybridSearchContext.h"
+#include "query/BooleanQuery.h"
 #include "server/delivery/request/BaseRequest.h"
 #include "utils/Status.h"
 
@@ -27,84 +30,126 @@ class RequestHandler {
     RequestHandler() = default;
 
     Status
-    CreateTable(const std::shared_ptr<Context>& context, const std::string& table_name, int64_t dimension,
-                int64_t index_file_size, int64_t metric_type);
+    CreateCollection(const std::shared_ptr<Context>& context, const std::string& collection_name, int64_t dimension,
+                     int64_t index_file_size, int64_t metric_type);
 
     Status
-    HasTable(const std::shared_ptr<Context>& context, const std::string& table_name, bool& has_table);
+    HasCollection(const std::shared_ptr<Context>& context, const std::string& collection_name, bool& has_collection);
 
     Status
-    DropTable(const std::shared_ptr<Context>& context, const std::string& table_name);
+    DropCollection(const std::shared_ptr<Context>& context, const std::string& collection_name);
 
     Status
-    CreateIndex(const std::shared_ptr<Context>& context, const std::string& table_name, int64_t index_type,
+    CreateIndex(const std::shared_ptr<Context>& context, const std::string& collection_name, int64_t index_type,
                 const milvus::json& json_params);
 
     Status
-    Insert(const std::shared_ptr<Context>& context, const std::string& table_name, engine::VectorsData& vectors,
+    Insert(const std::shared_ptr<Context>& context, const std::string& collection_name, engine::VectorsData& vectors,
            const std::string& partition_tag);
 
     Status
-    GetVectorByID(const std::shared_ptr<Context>& context, const std::string& table_name,
-                  const std::vector<int64_t>& ids, engine::VectorsData& vectors);
+    GetVectorsByID(const std::shared_ptr<Context>& context, const std::string& collection_name,
+                   const std::vector<int64_t>& ids, std::vector<engine::VectorsData>& vectors);
 
     Status
-    GetVectorIDs(const std::shared_ptr<Context>& context, const std::string& table_name,
+    GetVectorIDs(const std::shared_ptr<Context>& context, const std::string& collection_name,
                  const std::string& segment_name, std::vector<int64_t>& vector_ids);
 
     Status
-    ShowTables(const std::shared_ptr<Context>& context, std::vector<std::string>& tables);
+    ShowCollections(const std::shared_ptr<Context>& context, std::vector<std::string>& collections);
 
     Status
-    ShowTableInfo(const std::shared_ptr<Context>& context, const std::string& table_name, TableInfo& table_info);
+    ShowCollectionInfo(const std::shared_ptr<Context>& context, const std::string& collection_name,
+                       std::string& collection_info);
 
     Status
-    Search(const std::shared_ptr<Context>& context, const std::string& table_name, const engine::VectorsData& vectors,
-           int64_t topk, const milvus::json& extra_params, const std::vector<std::string>& partition_list,
-           const std::vector<std::string>& file_id_list, TopKQueryResult& result);
+    Search(const std::shared_ptr<Context>& context, const std::string& collection_name,
+           const engine::VectorsData& vectors, int64_t topk, const milvus::json& extra_params,
+           const std::vector<std::string>& partition_list, const std::vector<std::string>& file_id_list,
+           TopKQueryResult& result);
 
     Status
-    SearchByID(const std::shared_ptr<Context>& context, const std::string& table_name, int64_t vector_id, int64_t topk,
-               const milvus::json& extra_params, const std::vector<std::string>& partition_list,
-               TopKQueryResult& result);
+    SearchByID(const std::shared_ptr<Context>& context, const std::string& collection_name,
+               const std::vector<int64_t>& id_array, int64_t topk, const milvus::json& extra_params,
+               const std::vector<std::string>& partition_list, TopKQueryResult& result);
 
     Status
-    DescribeTable(const std::shared_ptr<Context>& context, const std::string& table_name, TableSchema& table_schema);
+    DescribeCollection(const std::shared_ptr<Context>& context, const std::string& collection_name,
+                       CollectionSchema& collection_schema);
 
     Status
-    CountTable(const std::shared_ptr<Context>& context, const std::string& table_name, int64_t& count);
+    CountCollection(const std::shared_ptr<Context>& context, const std::string& collection_name, int64_t& count);
 
     Status
     Cmd(const std::shared_ptr<Context>& context, const std::string& cmd, std::string& reply);
 
     Status
-    DeleteByID(const std::shared_ptr<Context>& context, const std::string& table_name,
+    DeleteByID(const std::shared_ptr<Context>& context, const std::string& collection_name,
                const std::vector<int64_t>& vector_ids);
 
     Status
-    PreloadTable(const std::shared_ptr<Context>& context, const std::string& table_name);
+    PreloadCollection(const std::shared_ptr<Context>& context, const std::string& collection_name);
 
     Status
-    DescribeIndex(const std::shared_ptr<Context>& context, const std::string& table_name, IndexParam& param);
+    DescribeIndex(const std::shared_ptr<Context>& context, const std::string& collection_name, IndexParam& param);
 
     Status
-    DropIndex(const std::shared_ptr<Context>& context, const std::string& table_name);
+    DropIndex(const std::shared_ptr<Context>& context, const std::string& collection_name);
 
     Status
-    CreatePartition(const std::shared_ptr<Context>& context, const std::string& table_name, const std::string& tag);
+    CreatePartition(const std::shared_ptr<Context>& context, const std::string& collection_name,
+                    const std::string& tag);
 
     Status
-    ShowPartitions(const std::shared_ptr<Context>& context, const std::string& table_name,
+    HasPartition(const std::shared_ptr<Context>& context, const std::string& collection_name, const std::string& tag,
+                 bool& has_partition);
+
+    Status
+    ShowPartitions(const std::shared_ptr<Context>& context, const std::string& collection_name,
                    std::vector<PartitionParam>& partitions);
 
     Status
-    DropPartition(const std::shared_ptr<Context>& context, const std::string& table_name, const std::string& tag);
+    DropPartition(const std::shared_ptr<Context>& context, const std::string& collection_name, const std::string& tag);
 
     Status
-    Flush(const std::shared_ptr<Context>& context, const std::vector<std::string>& table_names);
+    Flush(const std::shared_ptr<Context>& context, const std::vector<std::string>& collection_names);
 
     Status
-    Compact(const std::shared_ptr<Context>& context, const std::string& table_name);
+    Compact(const std::shared_ptr<Context>& context, const std::string& collection_name, double compact_threshold);
+
+    /*******************************************New Interface*********************************************/
+
+    Status
+    CreateHybridCollection(const std::shared_ptr<Context>& context, const std::string& collection_name,
+                           std::vector<std::pair<std::string, engine::meta::hybrid::DataType>>& field_types,
+                           std::vector<std::pair<std::string, uint64_t>>& vector_dimensions,
+                           std::vector<std::pair<std::string, std::string>>& field_extra_params);
+
+    Status
+    DescribeHybridCollection(const std::shared_ptr<Context>& context, const std::string& collection_name,
+                             std::unordered_map<std::string, engine::meta::hybrid::DataType>& field_types);
+
+    Status
+    HasHybridCollection(const std::shared_ptr<Context>& context, std::string& collection_name, bool& has_collection);
+
+    Status
+    DropHybridCollection(const std::shared_ptr<Context>& context, std::string& collection_name);
+
+    Status
+    InsertEntity(const std::shared_ptr<Context>& context, const std::string& collection_name,
+                 const std::string& partition_tag, uint64_t& row_num, std::vector<std::string>& field_names,
+                 std::vector<uint8_t>& attr_values, std::unordered_map<std::string, engine::VectorsData>& vector_datas);
+
+    Status
+    GetEntityByID(const std::shared_ptr<Context>& context, const std::string& collection_name,
+                  const std::vector<int64_t>& ids, std::vector<engine::AttrsData>& attrs,
+                  std::vector<engine::VectorsData>& vectors);
+
+    Status
+    HybridSearch(const std::shared_ptr<Context>& context, const std::string& collection_name,
+                 std::vector<std::string>& partition_list, query::GeneralQueryPtr& general_query,
+                 query::QueryPtr& query_ptr, milvus::json& json_params, std::vector<std::string>& field_names,
+                 engine::QueryResult& result);
 };
 
 }  // namespace server

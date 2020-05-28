@@ -61,7 +61,7 @@ class CollectInsertMetrics : CollectMetricsBase {
         if (n_ > 0) {
             auto total_time = TimeFromBegine();
             double avg_time = total_time / n_;
-            for (int i = 0; i < n_; ++i) {
+            for (size_t i = 0; i < n_; ++i) {
                 Metrics::GetInstance().AddVectorsDurationHistogramOberve(avg_time);
             }
 
@@ -90,7 +90,7 @@ class CollectQueryMetrics : CollectMetricsBase {
     ~CollectQueryMetrics() {
         if (nq_ > 0) {
             auto total_time = TimeFromBegine();
-            for (int i = 0; i < nq_; ++i) {
+            for (size_t i = 0; i < nq_; ++i) {
                 server::Metrics::GetInstance().QueryResponseSummaryObserve(total_time);
             }
             auto average_time = total_time / nq_;
@@ -186,11 +186,11 @@ class CollectDurationMetrics : CollectMetricsBase {
     ~CollectDurationMetrics() {
         auto total_time = TimeFromBegine();
         switch (index_type_) {
-            case engine::meta::TableFileSchema::RAW: {
+            case engine::meta::SegmentSchema::RAW: {
                 server::Metrics::GetInstance().SearchRawDataDurationSecondsHistogramObserve(total_time);
                 break;
             }
-            case engine::meta::TableFileSchema::TO_INDEX: {
+            case engine::meta::SegmentSchema::TO_INDEX: {
                 server::Metrics::GetInstance().SearchRawDataDurationSecondsHistogramObserve(total_time);
                 break;
             }
@@ -214,11 +214,11 @@ class CollectSearchTaskMetrics : CollectMetricsBase {
     ~CollectSearchTaskMetrics() {
         auto total_time = TimeFromBegine();
         switch (index_type_) {
-            case engine::meta::TableFileSchema::RAW: {
+            case engine::meta::SegmentSchema::RAW: {
                 server::Metrics::GetInstance().SearchRawDataDurationSecondsHistogramObserve(total_time);
                 break;
             }
-            case engine::meta::TableFileSchema::TO_INDEX: {
+            case engine::meta::SegmentSchema::TO_INDEX: {
                 server::Metrics::GetInstance().SearchRawDataDurationSecondsHistogramObserve(total_time);
                 break;
             }

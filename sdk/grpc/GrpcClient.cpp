@@ -36,13 +36,13 @@ GrpcClient::GrpcClient(std::shared_ptr<::grpc::Channel>& channel)
 GrpcClient::~GrpcClient() = default;
 
 Status
-GrpcClient::CreateTable(const ::milvus::grpc::TableSchema& table_schema) {
+GrpcClient::CreateCollection(const ::milvus::grpc::CollectionSchema& collection_schema) {
     ClientContext context;
     grpc::Status response;
-    ::grpc::Status grpc_status = stub_->CreateTable(&context, table_schema, &response);
+    ::grpc::Status grpc_status = stub_->CreateCollection(&context, collection_schema, &response);
 
     if (!grpc_status.ok()) {
-        std::cerr << "CreateTable gRPC failed!" << std::endl;
+        std::cerr << "CreateCollection gRPC failed!" << std::endl;
         return Status(StatusCode::RPCFailed, grpc_status.error_message());
     }
 
@@ -54,13 +54,13 @@ GrpcClient::CreateTable(const ::milvus::grpc::TableSchema& table_schema) {
 }
 
 bool
-GrpcClient::HasTable(const ::milvus::grpc::TableName& table_name, Status& status) {
+GrpcClient::HasCollection(const ::milvus::grpc::CollectionName& collection_name, Status& status) {
     ClientContext context;
     ::milvus::grpc::BoolReply response;
-    ::grpc::Status grpc_status = stub_->HasTable(&context, table_name, &response);
+    ::grpc::Status grpc_status = stub_->HasCollection(&context, collection_name, &response);
 
     if (!grpc_status.ok()) {
-        std::cerr << "HasTable gRPC failed!" << std::endl;
+        std::cerr << "HasCollection gRPC failed!" << std::endl;
         status = Status(StatusCode::RPCFailed, grpc_status.error_message());
     }
     if (response.status().error_code() != grpc::SUCCESS) {
@@ -72,13 +72,13 @@ GrpcClient::HasTable(const ::milvus::grpc::TableName& table_name, Status& status
 }
 
 Status
-GrpcClient::DropTable(const ::milvus::grpc::TableName& table_name) {
+GrpcClient::DropCollection(const ::milvus::grpc::CollectionName& collection_name) {
     ClientContext context;
     grpc::Status response;
-    ::grpc::Status grpc_status = stub_->DropTable(&context, table_name, &response);
+    ::grpc::Status grpc_status = stub_->DropCollection(&context, collection_name, &response);
 
     if (!grpc_status.ok()) {
-        std::cerr << "DropTable gRPC failed!" << std::endl;
+        std::cerr << "DropCollection gRPC failed!" << std::endl;
         return Status(StatusCode::RPCFailed, grpc_status.error_message());
     }
     if (response.error_code() != grpc::SUCCESS) {
@@ -125,24 +125,24 @@ GrpcClient::Insert(const ::milvus::grpc::InsertParam& insert_param, ::milvus::gr
 }
 
 Status
-GrpcClient::GetVectorByID(const grpc::VectorIdentity& vector_identity, ::milvus::grpc::VectorData& vector_data) {
+GrpcClient::GetEntityByID(const grpc::VectorsIdentity& vectors_identity, ::milvus::grpc::VectorsData& vectors_data) {
     ClientContext context;
-    ::grpc::Status grpc_status = stub_->GetVectorByID(&context, vector_identity, &vector_data);
+    ::grpc::Status grpc_status = stub_->GetVectorsByID(&context, vectors_identity, &vectors_data);
 
     if (!grpc_status.ok()) {
         std::cerr << "GetVectorByID rpc failed!" << std::endl;
         return Status(StatusCode::RPCFailed, grpc_status.error_message());
     }
-    if (vector_data.status().error_code() != grpc::SUCCESS) {
-        std::cerr << vector_data.status().reason() << std::endl;
-        return Status(StatusCode::ServerFailed, vector_data.status().reason());
+    if (vectors_data.status().error_code() != grpc::SUCCESS) {
+        std::cerr << vectors_data.status().reason() << std::endl;
+        return Status(StatusCode::ServerFailed, vectors_data.status().reason());
     }
 
     return Status::OK();
 }
 
 Status
-GrpcClient::GetIDsInSegment(const grpc::GetVectorIDsParam& param, grpc::VectorIds& vector_ids) {
+GrpcClient::ListIDInSegment(const grpc::GetVectorIDsParam& param, grpc::VectorIds& vector_ids) {
     ClientContext context;
     ::grpc::Status grpc_status = stub_->GetVectorIDs(&context, param, &vector_ids);
 
@@ -159,8 +159,8 @@ GrpcClient::GetIDsInSegment(const grpc::GetVectorIDsParam& param, grpc::VectorId
 }
 
 Status
-GrpcClient::Search(
-    const ::milvus::grpc::SearchParam& search_param, ::milvus::grpc::TopKQueryResult& topk_query_result) {
+GrpcClient::Search(const ::milvus::grpc::SearchParam& search_param,
+                   ::milvus::grpc::TopKQueryResult& topk_query_result) {
     ::milvus::grpc::TopKQueryResult query_result;
     ClientContext context;
     ::grpc::Status grpc_status = stub_->Search(&context, search_param, &topk_query_result);
@@ -179,14 +179,14 @@ GrpcClient::Search(
 }
 
 Status
-GrpcClient::DescribeTable(const std::string& table_name, ::milvus::grpc::TableSchema& grpc_schema) {
+GrpcClient::GetCollectionInfo(const std::string& collection_name, ::milvus::grpc::CollectionSchema& grpc_schema) {
     ClientContext context;
-    ::milvus::grpc::TableName grpc_tablename;
-    grpc_tablename.set_table_name(table_name);
-    ::grpc::Status grpc_status = stub_->DescribeTable(&context, grpc_tablename, &grpc_schema);
+    ::milvus::grpc::CollectionName grpc_collectionname;
+    grpc_collectionname.set_collection_name(collection_name);
+    ::grpc::Status grpc_status = stub_->DescribeCollection(&context, grpc_collectionname, &grpc_schema);
 
     if (!grpc_status.ok()) {
-        std::cerr << "DescribeTable rpc failed!" << std::endl;
+        std::cerr << "DescribeCollection rpc failed!" << std::endl;
         std::cerr << grpc_status.error_message() << std::endl;
         return Status(StatusCode::RPCFailed, grpc_status.error_message());
     }
@@ -200,13 +200,13 @@ GrpcClient::DescribeTable(const std::string& table_name, ::milvus::grpc::TableSc
 }
 
 int64_t
-GrpcClient::CountTable(grpc::TableName& table_name, Status& status) {
+GrpcClient::CountEntities(grpc::CollectionName& collection_name, Status& status) {
     ClientContext context;
-    ::milvus::grpc::TableRowCount response;
-    ::grpc::Status grpc_status = stub_->CountTable(&context, table_name, &response);
+    ::milvus::grpc::CollectionRowCount response;
+    ::grpc::Status grpc_status = stub_->CountCollection(&context, collection_name, &response);
 
     if (!grpc_status.ok()) {
-        std::cerr << "CountTable rpc failed!" << std::endl;
+        std::cerr << "CountCollection rpc failed!" << std::endl;
         status = Status(StatusCode::RPCFailed, grpc_status.error_message());
         return -1;
     }
@@ -218,44 +218,44 @@ GrpcClient::CountTable(grpc::TableName& table_name, Status& status) {
     }
 
     status = Status::OK();
-    return response.table_row_count();
+    return response.collection_row_count();
 }
 
 Status
-GrpcClient::ShowTables(milvus::grpc::TableNameList& table_name_list) {
+GrpcClient::ListCollections(milvus::grpc::CollectionNameList& collection_name_list) {
     ClientContext context;
     ::milvus::grpc::Command command;
-    ::grpc::Status grpc_status = stub_->ShowTables(&context, command, &table_name_list);
+    ::grpc::Status grpc_status = stub_->ShowCollections(&context, command, &collection_name_list);
 
     if (!grpc_status.ok()) {
-        std::cerr << "ShowTables gRPC failed!" << std::endl;
+        std::cerr << "ShowCollections gRPC failed!" << std::endl;
         std::cerr << grpc_status.error_message() << std::endl;
         return Status(StatusCode::RPCFailed, grpc_status.error_message());
     }
 
-    if (table_name_list.status().error_code() != grpc::SUCCESS) {
-        std::cerr << table_name_list.status().reason() << std::endl;
-        return Status(StatusCode::ServerFailed, table_name_list.status().reason());
+    if (collection_name_list.status().error_code() != grpc::SUCCESS) {
+        std::cerr << collection_name_list.status().reason() << std::endl;
+        return Status(StatusCode::ServerFailed, collection_name_list.status().reason());
     }
 
     return Status::OK();
 }
 
 Status
-GrpcClient::ShowTableInfo(grpc::TableName& table_name, grpc::TableInfo& table_info) {
+GrpcClient::GetCollectionStats(grpc::CollectionName& collection_name, grpc::CollectionInfo& collection_stats) {
     ClientContext context;
     ::milvus::grpc::Command command;
-    ::grpc::Status grpc_status = stub_->ShowTableInfo(&context, table_name, &table_info);
+    ::grpc::Status grpc_status = stub_->ShowCollectionInfo(&context, collection_name, &collection_stats);
 
     if (!grpc_status.ok()) {
-        std::cerr << "ShowTableInfo gRPC failed!" << std::endl;
+        std::cerr << "ShowCollectionInfo gRPC failed!" << std::endl;
         std::cerr << grpc_status.error_message() << std::endl;
         return Status(StatusCode::RPCFailed, grpc_status.error_message());
     }
 
-    if (table_info.status().error_code() != grpc::SUCCESS) {
-        std::cerr << table_info.status().reason() << std::endl;
-        return Status(StatusCode::ServerFailed, table_info.status().reason());
+    if (collection_stats.status().error_code() != grpc::SUCCESS) {
+        std::cerr << collection_stats.status().reason() << std::endl;
+        return Status(StatusCode::ServerFailed, collection_stats.status().reason());
     }
 
     return Status::OK();
@@ -284,13 +284,13 @@ GrpcClient::Cmd(const std::string& cmd, std::string& result) {
 }
 
 Status
-GrpcClient::PreloadTable(milvus::grpc::TableName& table_name) {
+GrpcClient::LoadCollection(milvus::grpc::CollectionName& collection_name) {
     ClientContext context;
     ::milvus::grpc::Status response;
-    ::grpc::Status grpc_status = stub_->PreloadTable(&context, table_name, &response);
+    ::grpc::Status grpc_status = stub_->PreloadCollection(&context, collection_name, &response);
 
     if (!grpc_status.ok()) {
-        std::cerr << "PreloadTable gRPC failed!" << std::endl;
+        std::cerr << "PreloadCollection gRPC failed!" << std::endl;
         return Status(StatusCode::RPCFailed, grpc_status.error_message());
     }
 
@@ -302,7 +302,7 @@ GrpcClient::PreloadTable(milvus::grpc::TableName& table_name) {
 }
 
 Status
-GrpcClient::DeleteByID(grpc::DeleteByIDParam& delete_by_id_param) {
+GrpcClient::DeleteEntityByID(grpc::DeleteByIDParam& delete_by_id_param) {
     ClientContext context;
     ::milvus::grpc::Status response;
     ::grpc::Status grpc_status = stub_->DeleteByID(&context, delete_by_id_param, &response);
@@ -320,9 +320,9 @@ GrpcClient::DeleteByID(grpc::DeleteByIDParam& delete_by_id_param) {
 }
 
 Status
-GrpcClient::DescribeIndex(grpc::TableName& table_name, grpc::IndexParam& index_param) {
+GrpcClient::GetIndexInfo(grpc::CollectionName& collection_name, grpc::IndexParam& index_param) {
     ClientContext context;
-    ::grpc::Status grpc_status = stub_->DescribeIndex(&context, table_name, &index_param);
+    ::grpc::Status grpc_status = stub_->DescribeIndex(&context, collection_name, &index_param);
 
     if (!grpc_status.ok()) {
         std::cerr << "DescribeIndex rpc failed!" << std::endl;
@@ -337,10 +337,10 @@ GrpcClient::DescribeIndex(grpc::TableName& table_name, grpc::IndexParam& index_p
 }
 
 Status
-GrpcClient::DropIndex(grpc::TableName& table_name) {
+GrpcClient::DropIndex(grpc::CollectionName& collection_name) {
     ClientContext context;
     ::milvus::grpc::Status response;
-    ::grpc::Status grpc_status = stub_->DropIndex(&context, table_name, &response);
+    ::grpc::Status grpc_status = stub_->DropIndex(&context, collection_name, &response);
 
     if (!grpc_status.ok()) {
         std::cerr << "DropIndex gRPC failed!" << std::endl;
@@ -372,10 +372,28 @@ GrpcClient::CreatePartition(const grpc::PartitionParam& partition_param) {
     return Status::OK();
 }
 
-Status
-GrpcClient::ShowPartitions(const grpc::TableName& table_name, grpc::PartitionList& partition_array) const {
+bool
+GrpcClient::HasPartition(const grpc::PartitionParam& partition_param, Status& status) const {
     ClientContext context;
-    ::grpc::Status grpc_status = stub_->ShowPartitions(&context, table_name, &partition_array);
+    ::milvus::grpc::BoolReply response;
+    ::grpc::Status grpc_status = stub_->HasPartition(&context, partition_param, &response);
+
+    if (!grpc_status.ok()) {
+        std::cerr << "HasPartition gRPC failed!" << std::endl;
+        status = Status(StatusCode::RPCFailed, grpc_status.error_message());
+    }
+    if (response.status().error_code() != grpc::SUCCESS) {
+        std::cerr << response.status().reason() << std::endl;
+        status = Status(StatusCode::ServerFailed, response.status().reason());
+    }
+    status = Status::OK();
+    return response.bool_reply();
+}
+
+Status
+GrpcClient::ListPartitions(const grpc::CollectionName& collection_name, grpc::PartitionList& partition_array) const {
+    ClientContext context;
+    ::grpc::Status grpc_status = stub_->ShowPartitions(&context, collection_name, &partition_array);
 
     if (!grpc_status.ok()) {
         std::cerr << "ShowPartitions gRPC failed!" << std::endl;
@@ -408,12 +426,12 @@ GrpcClient::DropPartition(const ::milvus::grpc::PartitionParam& partition_param)
 }
 
 Status
-GrpcClient::Flush(const std::string& table_name) {
+GrpcClient::Flush(const std::string& collection_name) {
     ClientContext context;
 
     ::milvus::grpc::FlushParam param;
-    if (!table_name.empty()) {
-        param.add_table_name_array(table_name);
+    if (!collection_name.empty()) {
+        param.add_collection_name_array(collection_name);
     }
 
     ::milvus::grpc::Status response;
@@ -432,10 +450,10 @@ GrpcClient::Flush(const std::string& table_name) {
 }
 
 Status
-GrpcClient::Compact(milvus::grpc::TableName& table_name) {
+GrpcClient::Compact(milvus::grpc::CollectionName& collection_name) {
     ClientContext context;
     ::milvus::grpc::Status response;
-    ::grpc::Status grpc_status = stub_->Compact(&context, table_name, &response);
+    ::grpc::Status grpc_status = stub_->Compact(&context, collection_name, &response);
 
     if (!grpc_status.ok()) {
         std::cerr << "Compact gRPC failed!" << std::endl;
@@ -452,6 +470,92 @@ GrpcClient::Compact(milvus::grpc::TableName& table_name) {
 Status
 GrpcClient::Disconnect() {
     stub_.release();
+    return Status::OK();
+}
+
+Status
+GrpcClient::CreateHybridCollection(milvus::grpc::Mapping& mapping) {
+    ClientContext context;
+    ::milvus::grpc::Status response;
+    ::grpc::Status grpc_status = stub_->CreateHybridCollection(&context, mapping, &response);
+
+    if (!grpc_status.ok()) {
+        std::cerr << "CreateHybridCollection gRPC failed!" << std::endl;
+        return Status(StatusCode::RPCFailed, grpc_status.error_message());
+    }
+
+    if (response.error_code() != grpc::SUCCESS) {
+        std::cerr << response.reason() << std::endl;
+        return Status(StatusCode::ServerFailed, response.reason());
+    }
+    return Status::OK();
+}
+
+Status
+GrpcClient::InsertEntities(milvus::grpc::HInsertParam& entities, milvus::grpc::HEntityIDs& ids) {
+    ClientContext context;
+    ::grpc::Status grpc_status = stub_->InsertEntity(&context, entities, &ids);
+
+    if (!grpc_status.ok()) {
+        std::cerr << "InsertEntities gRPC failed!" << std::endl;
+        return Status(StatusCode::RPCFailed, grpc_status.error_message());
+    }
+
+    if (ids.status().error_code() != grpc::SUCCESS) {
+        std::cerr << ids.status().reason() << std::endl;
+        return Status(StatusCode::ServerFailed, ids.status().reason());
+    }
+    return Status::OK();
+}
+
+Status
+GrpcClient::HybridSearchPB(milvus::grpc::HSearchParamPB& search_param, milvus::grpc::HQueryResult& result) {
+    ClientContext context;
+    ::grpc::Status grpc_status = stub_->HybridSearchPB(&context, search_param, &result);
+
+    if (!grpc_status.ok()) {
+        std::cerr << "HybridSearchPB gRPC failed!" << std::endl;
+        return Status(StatusCode::RPCFailed, grpc_status.error_message());
+    }
+
+    if (result.status().error_code() != grpc::SUCCESS) {
+        std::cerr << result.status().reason() << std::endl;
+        return Status(StatusCode::ServerFailed, result.status().reason());
+    }
+    return Status::OK();
+}
+
+Status
+GrpcClient::HybridSearch(milvus::grpc::HSearchParam& search_param, milvus::grpc::HQueryResult& result) {
+    ClientContext context;
+    ::grpc::Status grpc_status = stub_->HybridSearch(&context, search_param, &result);
+
+    if (!grpc_status.ok()) {
+        std::cerr << "HybridSearch gRPC failed!" << std::endl;
+        return Status(StatusCode::RPCFailed, grpc_status.error_message());
+    }
+
+    if (result.status().error_code() != grpc::SUCCESS) {
+        std::cerr << result.status().reason() << std::endl;
+        return Status(StatusCode::ServerFailed, result.status().reason());
+    }
+    return Status::OK();
+}
+
+Status
+GrpcClient::GetHEntityByID(milvus::grpc::VectorsIdentity& vectors_identity, milvus::grpc::HEntity& entity) {
+    ClientContext context;
+    ::grpc::Status grpc_status = stub_->GetEntityByID(&context, vectors_identity, &entity);
+
+    if (!grpc_status.ok()) {
+        std::cerr << "HybridSearch gRPC failed!" << std::endl;
+        return Status(StatusCode::RPCFailed, grpc_status.error_message());
+    }
+
+    if (entity.status().error_code() != grpc::SUCCESS) {
+        std::cerr << entity.status().reason() << std::endl;
+        return Status(StatusCode::ServerFailed, entity.status().reason());
+    }
     return Status::OK();
 }
 

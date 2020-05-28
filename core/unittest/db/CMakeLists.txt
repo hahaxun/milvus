@@ -13,6 +13,7 @@
 
 set(test_files
         ${CMAKE_CURRENT_SOURCE_DIR}/test_db.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_hybrid_db.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/test_db_mysql.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/test_wal.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/test_engine.cpp
@@ -23,6 +24,7 @@ set(test_files
         ${CMAKE_CURRENT_SOURCE_DIR}/test_search.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/test_delete.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/test_search_by_id.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_snapshot.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp)
 
 add_executable(test_db
@@ -36,6 +38,3 @@ target_link_libraries(test_db
         ${unittest_libs})
 
 install(TARGETS test_db DESTINATION unittest)
-
-
-

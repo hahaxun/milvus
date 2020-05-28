@@ -31,11 +31,9 @@ class TestFlushBase:
         params=gen_simple_index()
     )
     def get_simple_index(self, request, connect):
-        if str(connect._cmd("mode")[1]) == "CPU":
-            if request.param["index_type"] != IndexType.IVF_SQ8 or request.param["index_type"] != IndexType.IVFLAT or request.param["index_type"] != IndexType.FLAT:
-                pytest.skip("Only support index_type: flat/ivf_flat/ivf_sq8")
-        else:
-            pytest.skip("Only support CPU mode")
+        if str(connect._cmd("mode")[1]) == "GPU":
+            if request.param["index_type"] not in [IndexType.IVF_SQ8, IndexType.IVFLAT, IndexType.FLAT, IndexType.IVF_PQ, IndexType.IVF_SQ8H]:
+                pytest.skip("Only support index_type: idmap/flat")
         return request.param
 
     def test_flush_collection_not_existed(self, connect, collection):
@@ -67,13 +65,13 @@ class TestFlushBase:
         ids = [i for i in range(nb)]
         status, ids = connect.insert(collection, vectors, ids)
         status = connect.flush([collection])
-        result, res = connect.count_collection(collection)
+        result, res = connect.count_entities(collection)
         assert res == nb
         status, ids = connect.insert(collection, vectors, ids, partition_tag=tag)
         assert status.OK()
         status = connect.flush([collection])
         assert status.OK()
-        result, res = connect.count_collection(collection)
+        result, res = connect.count_entities(collection)
         assert res == 2 * nb
 
     def test_add_partitions_flush(self, connect, collection):
@@ -93,7 +91,7 @@ class TestFlushBase:
         assert status.OK()
         status = connect.flush([collection])
         assert status.OK()
-        result, res = connect.count_collection(collection)
+        result, res = connect.count_entities(collection)
         assert res == 2 * nb
 
     def test_add_collections_flush(self, connect, collection):
@@ -118,9 +116,9 @@ class TestFlushBase:
         status = connect.flush([collection])
         status = connect.flush([collection_new])
         assert status.OK()
-        result, res = connect.count_collection(collection)
+        result, res = connect.count_entities(collection)
         assert res == nb
-        result, res = connect.count_collection(collection_new)
+        result, res = connect.count_entities(collection_new)
         assert res == nb
        
     def test_add_flush_multiable_times(self, connect, collection):
@@ -129,15 +127,16 @@ class TestFlushBase:
         expected: status ok
         '''
         vectors = gen_vectors(nb, dim)
-        status, ids = connect.add_vectors(collection, vectors)
+        status, ids = connect.insert(collection, vectors)
         assert status.OK()
         for i in range(10):
             status = connect.flush([collection])
             assert status.OK()
         query_vecs = [vectors[0], vectors[1], vectors[-1]]
-        status, res = connect.search_vectors(collection, top_k, query_records=query_vecs)
+        status, res = connect.search(collection, top_k, query_records=query_vecs)
         assert status.OK()
 
+    # TODO: stable case
     def test_add_flush_auto(self, connect, collection):
         '''
         method: add vectors
@@ -145,12 +144,18 @@ class TestFlushBase:
         '''
         vectors = gen_vectors(nb, dim)
         ids = [i for i in range(nb)]
-        status, ids = connect.add_vectors(collection, vectors, ids)
+        status, ids = connect.insert(collection, vectors, ids)
         assert status.OK()
-        time.sleep(2)
-        status, res = connect.count_collection(collection)
-        assert status.OK()
-        assert res == nb 
+        timeout = 10
+        start_time = time.time()
+        while (time.time()-start_time < timeout):
+            time.sleep(1)
+            status, res = connect.count_entities(collection)
+            if res == nb:
+                assert status.OK()
+                break
+        if time.time()-start_time > timeout:
+            assert False
 
     @pytest.fixture(
         scope="function",
@@ -162,7 +167,6 @@ class TestFlushBase:
     def same_ids(self, request):
         yield request.param
 
-    # both autoflush / flush
     def test_add_flush_same_ids(self, connect, collection, same_ids):
         '''
         method: add vectors, with same ids, count(same ids) < 15, > 15
@@ -173,11 +177,10 @@ class TestFlushBase:
         for i, item in enumerate(ids):
             if item <= same_ids:
                 ids[i] = 0
-        status, ids = connect.add_vectors(collection, vectors, ids)
-        time.sleep(2)
+        status, ids = connect.insert(collection, vectors, ids)
         status = connect.flush([collection])
         assert status.OK()
-        status, res = connect.count_collection(collection)
+        status, res = connect.count_entities(collection)
         assert status.OK()
         assert res == nb 
 
@@ -187,50 +190,90 @@ class TestFlushBase:
         expected: status ok
         '''
         vectors = gen_vectors(nb, dim)
-        status, ids = connect.add_vectors(collection, vectors)
+        status, ids = connect.insert(collection, vectors)
         assert status.OK()
-        status = connect.delete_by_id(collection, [ids[-1]])
+        status = connect.delete_entity_by_id(collection, [ids[-1]])
         assert status.OK()
         for i in range(10):
             status = connect.flush([collection])
             assert status.OK()
         query_vecs = [vectors[0], vectors[1], vectors[-1]]
-        status, res = connect.search_vectors(collection, top_k, query_records=query_vecs)
+        status, res = connect.search(collection, top_k, query_records=query_vecs)
         assert status.OK()
 
     # TODO: CI fail, LOCAL pass
     def _test_collection_count_during_flush(self, connect, args):
         '''
-        method: flush collection at background, call `count_collection`
+        method: flush collection at background, call `count_entities`
         expected: status ok
         '''
         collection = gen_unique_str() 
-        uri = "tcp://%s:%s" % (args["ip"], args["port"])
         param = {'collection_name': collection,
                  'dimension': dim,
                  'index_file_size': index_file_size,
                  'metric_type': MetricType.L2}
-        milvus = get_milvus(args["handler"])
-        milvus.connect(uri=uri)
+        milvus = get_milvus(args["ip"], args["port"], handler=args["handler"])
         milvus.create_collection(param)
         vectors = gen_vector(nb, dim)
-        status, ids = milvus.add_vectors(collection, vectors, ids=[i for i in range(nb)])
+        status, ids = milvus.insert(collection, vectors, ids=[i for i in range(nb)])
         def flush(collection_name):
-            milvus = get_milvus(args["handler"])
-            milvus.connect(uri=uri)
-            status = milvus.delete_by_id(collection_name, [i for i in range(nb)])
+            milvus = get_milvus(args["ip"], args["port"], handler=args["handler"])
+            status = milvus.delete_entity_by_id(collection_name, [i for i in range(nb)])
             assert status.OK()
             status = milvus.flush([collection_name])
             assert status.OK()
         p = Process(target=flush, args=(collection, ))
         p.start()
-        status, res = milvus.count_collection(collection)
+        status, res = milvus.count_entities(collection)
         assert status.OK()
         p.join()
-        status, res = milvus.count_collection(collection)
+        status, res = milvus.count_entities(collection)
         assert status.OK()
         logging.getLogger().info(res)
         assert res == 0
+
+
+class TestFlushAsync:
+    @pytest.fixture(scope="function", autouse=True)
+    def skip_http_check(self, args):
+        if args["handler"] == "HTTP":
+            pytest.skip("skip in http mode")
+
+    """
+    ******************************************************************
+      The following cases are used to test `flush` function
+    ******************************************************************
+    """
+    def check_status(self, status, result):
+        logging.getLogger().info("In callback check status")
+        assert status.OK()
+
+    def test_flush_empty_collection(self, connect, collection):
+        '''
+        method: flush collection with no vectors
+        expected: status ok
+        '''
+        future = connect.flush([collection], _async=True)
+        status = future.result()
+        assert status.OK()
+
+    def test_flush_async(self, connect, collection):
+        vectors = gen_vectors(nb, dim)
+        status, ids = connect.insert(collection, vectors)
+        future = connect.flush([collection], _async=True)
+        status = future.result()
+        assert status.OK()
+
+    def test_flush_async(self, connect, collection):
+        nb = 100000
+        vectors = gen_vectors(nb, dim)
+        connect.insert(collection, vectors)
+        logging.getLogger().info("before")
+        future = connect.flush([collection], _async=True, _callback=self.check_status)
+        logging.getLogger().info("after")
+        future.done()
+        status = future.result()
+        assert status.OK()
 
 
 class TestCollectionNameInvalid(object):

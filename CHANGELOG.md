@@ -2,7 +2,125 @@
 
 Please mark all change in change log and use the issue from GitHub
 
-# Milvus 0.7.1 (TBD)
+# Milvus 0.10.0 (TBD)
+
+## Bug
+
+## Feature
+
+## Improvement
+-   \#2307 Disable index SPTAG by default
+
+## Task
+
+# Milvus 0.9.0 (2020-05-15)
+
+## Bug
+-   \#1705 Limit the insert data batch size
+-   \#1776 Error out when index SQ8H run in CPU mode
+-   \#1925 To flush all collections, flush cannot work
+-   \#1929 Skip MySQL meta schema field width check
+-   \#1946 Fix load index file CPU2GPU fail during searching
+-   \#1955 Switch create_index operation to background once client break connection
+-   \#1997 Index file missed after compact
+-   \#2002 Remove log error msg `Attributes is null`
+-   \#2073 Fix CheckDBConfigBackendUrl error message
+-   \#2076 CheckMetricConfigAddress error message
+-   \#2120 Fix Search expected failed if search params set invalid
+-   \#2121 Allow regex match partition tag when search
+-   \#2128 Check has_partition params
+-   \#2131 Distance/ID returned is not correct if searching with duplicate ids
+-   \#2141 Fix server start failed if wal directory exist
+-   \#2169 Fix SingleIndexTest.IVFSQHybrid unittest
+-   \#2194 Fix get collection info failed
+-   \#2196 Fix server start failed if wal is disabled
+-   \#2203 0.8.0 id=-1 is returned when total count < topk
+-   \#2228 Fix show partitions failed in http module
+-   \#2231 Use server_config to define hard-delete delay time for segment files
+-   \#2261 Re-define result returned by has_collection if collection in delete state
+-   \#2264 Milvus opened too many files when the metric_config.enable_monitor=true
+-   \#2266 Server hang when using multi-clients to query different collections
+-   \#2280 has_partition should return true for `_default`
+
+## Feature
+-   \#1751 Add api SearchByID
+-   \#1752 Add api GetVectorsByID
+-   \#1962 Add api HasPartition
+-   \#1965 FAISS/NSG/HNSW/ANNOY use unified distance calculation algorithm
+-   \#2054 Check if CPU instruction sets are illegal
+-   \#2057 Add a config parameter to switch off http server
+-   \#2059 Add lock file avoid multiple instances modifying data at the same time
+-   \#2064 Warn when use SQLite as metadata management
+-   \#2111 Check GPU environment before start server
+-   \#2206 Log file rotating
+-   \#2240 Obtain running rpc requests information
+-   \#2268 Intelligently detect openblas library in system to avoid installing from source code every time
+-   \#2283 Suspend the building tasks when any query comand arrives.
+-   \#2417 Support Structured Index Based on Sort
+
+## Improvement
+-   \#221 Refactor LOG macro
+-   \#833 Catch exception in RolloutHandler and output in stderr
+-   \#1796 Compile Openblas with source code to improve the performance
+-   \#1942 Background merge file strategy
+-   \#2039 Support Milvus run on SSE CPUs
+-   \#2149 Merge server_cpu_config.template and server_gpu_config.template
+-   \#2153 Upgrade thirdparty oatpp to v1.0.0
+-   \#2167 Merge log_config.conf with server_config.yaml
+-   \#2173 Check storage permission
+-   \#2178 Using elkan K-Means to improve IVF
+-   \#2185 Change id to string format in http module
+-   \#2186 Update endpoints in http module
+-   \#2190 Fix memory usage is twice of index size when using GPU searching
+-   \#2248 Use hostname and port as instance label of metrics
+-   \#2252 Upgrade mishards APIs and requirements
+-   \#2256 k-means clustering algorithm use only Euclidean distance metric
+-   \#2300 Upgrade mishrads configuration to version 0.4
+-   \#2311 Update mishards methods 
+-   \#2330 Change url for behavior 'get_entities_by_id'
+-   \#2347 Update http document for v0.9.0
+-   \#2358 Upgrade mishards for v0.9.0 
+
+## Task
+
+# Milvus 0.8.0 (2020-04-15)
+
+## Bug
+-   \#1276 SQLite throw exception after create 50000+ partitions in a table
+-   \#1762 Server is not forbidden to create new partition which tag is `_default`
+-   \#1789 Fix multi-client search cause server crash
+-   \#1832 Fix crash in tracing module
+-   \#1873 Fix index file serialize to incorrect path
+-   \#1881 Fix bad alloc when index files lost
+-   \#1883 Fix inserted vectors becomes all zero when index_file_size >= 2GB
+-   \#1901 Search failed with flat index
+-   \#1903 Fix invalid annoy result
+-   \#1910 C++ SDK GetIDsInSegment could not work for large dataset
+
+## Feature
+-   \#261  Integrate ANNOY into Milvus
+-   \#1655 GPU index support delete vectors
+-   \#1660 IVF PQ CPU support deleted vectors searching
+-   \#1661 HNSW support deleted vectors searching
+-   \#1825 Add annoy index type in C++ sdk
+-   \#1849 NSG support deleted vectors searching
+-   \#1893 Log config information and device information
+
+## Improvement
+-   \#1627 Move read/write index APIs into codec
+-   \#1784 Add Substructure and Superstructure in http module
+-   \#1858 Disable S3 build
+-   \#1882 Add index annoy into http module
+-   \#1885 Optimize knowhere unittest
+-   \#1886 Refactor log on search and insert request
+-   \#1897 Heap pop and push can be realized by heap_swap_top
+-   \#1921 Use TimeRecorder instead of chrono
+-   \#1928 Fix too many data and uid copies when loading files
+-   \#1930 Upgrade mishards to v0.8.0
+
+## Task
+
+# Milvus 0.7.1 (2020-03-29)
 
 ## Bug
 -   \#1301 Data in WAL may be accidentally inserted into a new table with the same name.
@@ -11,22 +129,39 @@ Please mark all change in change log and use the issue from GitHub
 -   \#1648 The cache cannot be used all when the vector type is binary
 -   \#1651 Check validity of dimension when collection metric type is binary one
 -   \#1663 PQ index parameter 'm' validation
+-   \#1686 API search_in_files cannot work correctly when vectors is stored in certain non-default partition
+-   \#1689 Fix SQ8H search fail on SIFT-1B dataset
+-   \#1667 Create index failed with type: rnsg if metric_type is IP
+-   \#1708 NSG search crashed
+-   \#1724 Remove unused unittests
+-   \#1728 Optimize request handler to combine similar query
+-   \#1734 Opentracing for combined search request
+-   \#1735 Fix search out of memory with ivf_flat 
+-   \#1747 Expected error status if search with partition_tag not existed
+-   \#1756 Fix memory exhausted during searching 
+-   \#1781 Fix search hang with SQ8H
+-   \#1812 Fix incorrect request method in search example in http readme
+-   \#1818 Duplicate data generated after restart milvus server
 
 ## Feature
 -   \#1603 BinaryFlat add 2 Metric: Substructure and Superstructure
--   \#1660 IVF PQ CPU support deleted vectors searching
 
 ## Improvement
+-   \#267 Improve search performance: reduce delay
 -   \#342 Knowhere and Wrapper refactor
 -   \#1537 Optimize raw vector and uids read/write
 -   \#1546 Move Config.cpp to config directory
 -   \#1547 Rename storage/file to storage/disk and rename classes
 -   \#1548 Move store/Directory to storage/Operation and add FSHandler
--   \#1572 optimize config cpu/gpu cache_capacity setter
+-   \#1572 Optimize config cpu/gpu cache_capacity setter
 -   \#1619 Improve compact performance
 -   \#1649 Fix Milvus crash on old CPU 
 -   \#1653 IndexFlat (SSE) and IndexBinaryFlat performance improvement for small NQ
 -   \#1678 Remove CUSTOMIZATION macro 
+-   \#1698 Upgrade mishards to v0.7.0
+-   \#1719 Improve Milvus log
+-   \#1754 Optimize behavior to get file ids from metadata in mishards
+-   \#1799 Update docker images to 0.7.1 in mishards
 
 ## Task
 
@@ -43,8 +178,8 @@ Please mark all change in change log and use the issue from GitHub
 -   \#995 Table count set to 0 if no tables found
 -   \#1010 Improve error message when offset or page_size is equal 0
 -   \#1022 Check if partition name is valid
--   \#1028 check if table exists when show partitions
--   \#1029 check if table exists when try to delete partition
+-   \#1028 Check if table exists when show partitions
+-   \#1029 Check if table exists when try to delete partition
 -   \#1066 Optimize http insert and search speed
 -   \#1022 Check if partition name is legal
 -   \#1028 Check if table exists when show partitions
@@ -88,6 +223,8 @@ Please mark all change in change log and use the issue from GitHub
 -   \#1598 Server down during mixed operations
 -   \#1601 External link bug in HTTP doc
 -   \#1609 Refine Compact function
+-   \#1808 Building index params check for Annoy
+-   \#1852 Search index type<Annoy> failed with reason `failed to load index file`
 
 ## Feature
 -   \#216 Add CLI to get server info
@@ -146,7 +283,7 @@ Please mark all change in change log and use the issue from GitHub
 # Milvus 0.6.0 (2019-12-07)
 
 ## Bug
--   \#228 memory usage increased slowly during searching vectors
+-   \#228 Memory usage increased slowly during searching vectors
 -   \#246 Exclude src/external folder from code coverage for jenkin ci
 -   \#248 Reside src/external in thirdparty
 -   \#316 Some files not merged after vectors added
@@ -173,7 +310,7 @@ Please mark all change in change log and use the issue from GitHub
 -   \#523 Erase file data from cache once the file is marked as deleted
 -   \#527 faiss benchmark not compatible with faiss 1.6.0
 -   \#530 BuildIndex stop when do build index and search simultaneously
--   \#532 assigin value to `table_name` from confest shell
+-   \#532 Assigin value to `table_name` from confest shell
 -   \#533 NSG build failed with MetricType Inner Product
 -   \#543 client raise exception in shards when search results is empty
 -   \#545 Avoid dead circle of build index thread when error occurs
@@ -216,7 +353,7 @@ Please mark all change in change log and use the issue from GitHub
 ## Improvement
 -   \#255 Add ivfsq8 test report detailed version
 -   \#260 C++ SDK README
--   \#266 Rpc request source code refactor
+-   \#266 RPC request source code refactor
 -   \#274 Logger the time cost during preloading data
 -   \#275 Rename C++ SDK IndexType
 -   \#284 Change C++ SDK to shared library
@@ -248,7 +385,7 @@ Please mark all change in change log and use the issue from GitHub
 ## Improvement
 -   \#204 improve grpc performance in search
 -   \#207 Add more unittest for config set/get
--   \#208 optimize unittest to support run single test more easily
+-   \#208 Optimize unittest to support run single test more easily
 -   \#284 Change C++ SDK to shared library
 -   \#260 C++ SDK README
 
@@ -609,7 +746,7 @@ Please mark all change in change log and use the issue from GitHub
 -   MS-65 Implement GetTableRowCount interface
 -   MS-45 Implement DeleteTable interface
 -   MS-75 cmake: change faiss version to 1.5.2; add CUDA gencode
--   MS-81 fix faiss ptx issue; change cuda gencode
+-   MS-81 Fix faiss ptx issue; change cuda gencode
 -   MS-84 cmake: add arrow, jemalloc and jsoncons third party; default build option OFF
 -   MS-85 add NetIO metric
 -   MS-96 add new query interface for specified files
@@ -632,8 +769,8 @@ Please mark all change in change log and use the issue from GitHub
 -   MS-34 Fix prometheus-cpp thirdparty
 -   MS-67 Fix license check bug
 -   MS-76 Fix pipeline crash bug
--   MS-100 cmake: fix AWS build issue
--   MS-101 change AWS build type to Release
+-   MS-100 CMake: fix AWS build issue
+-   MS-101 Change AWS build type to Release
 
 ## Improvement
 
@@ -645,15 +782,15 @@ Please mark all change in change log and use the issue from GitHub
 -   MS-6 Implement SDK interface part 1
 -   MS-16 Implement metrics without prometheus
 -   MS-21 Implement SDK interface part 2
--   MS-26 cmake. Add thirdparty packages
--   MS-31 cmake: add prometheus
--   MS-33 cmake: add -j4 to make third party packages build faster
--   MS-27 support gpu config and disable license build config in cmake
+-   MS-26 CMake. Add thirdparty packages
+-   MS-31 CMake: add prometheus
+-   MS-33 CMake: add -j4 to make third party packages build faster
+-   MS-27 Support gpu config and disable license build config in cmake
 -   MS-47 Add query vps metrics
 -   MS-37 Add query, cache usage, disk write speed and file data size metrics
 -   MS-30 Use faiss v1.5.2
--   MS-54 cmake: Change Thrift third party URL to github.com
--   MS-69 prometheus: add all proposed metrics
+-   MS-54 CMake: Change Thrift third party URL to github.com
+-   MS-69 Prometheus: add all proposed metrics
 
 ## Task
 

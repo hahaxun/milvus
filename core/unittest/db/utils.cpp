@@ -25,6 +25,9 @@
 #include "cache/GpuCacheMgr.h"
 #include "db/DBFactory.h"
 #include "db/Options.h"
+#include "db/snapshot/OperationExecutor.h"
+#include "db/snapshot/Snapshots.h"
+#include "db/snapshot/ResourceHolders.h"
 
 
 #ifdef MILVUS_GPU_VERSION
@@ -38,48 +41,68 @@ INITIALIZE_EASYLOGGINGPP
 
 namespace {
 
-static const char *CONFIG_STR =
-    "# All the following configurations are default values.\n"
-    "\n"
+static const char* CONFIG_STR =
+    "version: 0.4\n"
     "server_config:\n"
-    "  address: 0.0.0.0                  # milvus server ip address (IPv4)\n"
-    "  port: 19530                       # port range: 1025 ~ 65534\n"
-    "  deploy_mode: single               \n"
+    "  address: 0.0.0.0\n"
+    "  port: 19530\n"
+    "  deploy_mode: single\n"
     "  time_zone: UTC+8\n"
+    "  web_enable: true\n"
+    "  web_port: 19121\n"
     "\n"
     "db_config:\n"
-    "  backend_url: sqlite://:@:/        \n"
-    "                                    \n"
-    "                                    # Replace 'dialect' with 'mysql' or 'sqlite'\n"
+    "  backend_url: sqlite://:@:/\n"
+    "  preload_collection:\n"
+    "  auto_flush_interval: 1\n"
     "\n"
     "storage_config:\n"
-    "  primary_path: /tmp/milvus         # path used to store data and meta\n"
-    "  secondary_path:                   # path used to store data only, split by semicolon\n"
+    "  primary_path: /tmp/milvus\n"
+    "  secondary_path:\n"
+    "  file_cleanup_timeout: 10\n"
     "\n"
     "metric_config:\n"
-    "  enable_monitor: false             # enable monitoring or not\n"
+    "  enable_monitor: false\n"
     "  address: 127.0.0.1\n"
-    "  port: 9091                        # port prometheus used to fetch metrics\n"
+    "  port: 9091\n"
     "\n"
     "cache_config:\n"
-    "  cpu_cache_capacity: 4             # GB, CPU memory used for cache\n"
-    "  cpu_cache_threshold: 0.85         # percentage of data kept when cache cleanup triggered\n"
-    "  insert_buffer_size: 4             # GB, maximum insert buffer size allowed\n"
-    "  cache_insert_data: true          # whether load inserted data into cache\n"
+    "  cpu_cache_capacity: 4\n"
+    "  insert_buffer_size: 1\n"
+    "  cache_insert_data: false\n"
     "\n"
     "engine_config:\n"
-    "  use_blas_threshold: 20\n"
+    "  use_blas_threshold: 1100\n"
+    "  gpu_search_threshold: 1000\n"
     "\n"
-    #ifdef MILVUS_GPU_VERSION
     "gpu_resource_config:\n"
-    "  enable: true                      # whether to enable GPU resources\n"
-    "  cache_capacity: 4                 # GB, size of GPU memory per card used for cache, must be a positive integer\n"
-    "  search_resources:                 # define the GPU devices used for search computation, must be in format gpux\n"
+    "  enable: true\n"
+    "  cache_capacity: 1\n"
+    "  search_resources:\n"
     "    - gpu0\n"
-    "  build_index_resources:            # define the GPU devices used for index building, must be in format gpux\n"
+    "  build_index_resources:\n"
     "    - gpu0\n"
-    #endif
-    "\n";
+    "\n"
+    "tracing_config:\n"
+    "  json_config_path:\n"
+    "\n"
+    "wal_config:\n"
+    "  enable: true\n"
+    "  recovery_error_ignore: true\n"
+    "  buffer_size: 256\n"
+    "  wal_path: /tmp/milvus/wal\n"
+    "\n"
+    "logs:\n"
+    "  trace.enable: true\n"
+    "  debug.enable: true\n"
+    "  info.enable: true\n"
+    "  warning.enable: true\n"
+    "  error.enable: true\n"
+    "  fatal.enable: true\n"
+    "  path: /tmp/milvus/logs\n"
+    "  max_log_file_size: 256\n"
+    "  delete_exceeds: 10\n"
+    "";
 
 void
 WriteToFile(const std::string &file_path, const char *content) {
@@ -175,8 +198,8 @@ DBTest::SetUp() {
 #endif
     res_mgr->Start();
     milvus::scheduler::SchedInst::GetInstance()->Start();
-
     milvus::scheduler::JobMgrInst::GetInstance()->Start();
+    milvus::scheduler::CPUBuilderInst::GetInstance()->Start();
 
     auto options = GetOptions();
     options.insert_cache_immediately_ = true;
@@ -188,11 +211,14 @@ DBTest::SetUp() {
 
 void
 DBTest::TearDown() {
-    db_->Stop();
-    db_->DropAll();
+    if (db_) {
+        db_->Stop();
+        db_->DropAll();
+    }
 
     milvus::scheduler::JobMgrInst::GetInstance()->Stop();
     milvus::scheduler::SchedInst::GetInstance()->Stop();
+    milvus::scheduler::CPUBuilderInst::GetInstance()->Stop();
     milvus::scheduler::ResMgrInst::GetInstance()->Stop();
     milvus::scheduler::ResMgrInst::GetInstance()->Clear();
 
@@ -309,7 +335,9 @@ MySqlMetaTest::SetUp() {
 
 void
 MySqlMetaTest::TearDown() {
-    impl_->DropAll();
+    if (impl_) {
+        impl_->DropAll();
+    }
 
     BaseTest::TearDown();
 
@@ -324,6 +352,34 @@ MySqlMetaTest::GetOptions() {
     options.meta_.backend_uri_ = test_env->getURI();
 
     return options;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void
+SnapshotTest::SetUp() {
+    BaseTest::SetUp();
+    milvus::engine::snapshot::OperationExecutor::GetInstance().Start();
+    milvus::engine::snapshot::CollectionCommitsHolder::GetInstance().Reset();
+    milvus::engine::snapshot::CollectionsHolder::GetInstance().Reset();
+    milvus::engine::snapshot::SchemaCommitsHolder::GetInstance().Reset();
+    milvus::engine::snapshot::FieldCommitsHolder::GetInstance().Reset();
+    milvus::engine::snapshot::FieldsHolder::GetInstance().Reset();
+    milvus::engine::snapshot::FieldElementsHolder::GetInstance().Reset();
+    milvus::engine::snapshot::PartitionsHolder::GetInstance().Reset();
+    milvus::engine::snapshot::PartitionCommitsHolder::GetInstance().Reset();
+    milvus::engine::snapshot::SegmentsHolder::GetInstance().Reset();
+    milvus::engine::snapshot::SegmentCommitsHolder::GetInstance().Reset();
+    milvus::engine::snapshot::SegmentFilesHolder::GetInstance().Reset();
+
+    milvus::engine::snapshot::Snapshots::GetInstance().Reset();
+
+    milvus::engine::snapshot::Store::GetInstance().Mock();
+}
+
+void
+SnapshotTest::TearDown() {
+    milvus::engine::snapshot::OperationExecutor::GetInstance().Stop();
+    BaseTest::TearDown();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////

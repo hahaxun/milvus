@@ -13,11 +13,14 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "Options.h"
 #include "Types.h"
+#include "context/HybridSearchContext.h"
 #include "meta/Meta.h"
+#include "query/GeneralQuery.h"
 #include "server/context/Context.h"
 #include "utils/Status.h"
 
@@ -29,7 +32,9 @@ class Env;
 class DB {
  public:
     DB() = default;
+
     DB(const DB&) = delete;
+
     DB&
     operator=(const DB&) = delete;
 
@@ -37,108 +42,136 @@ class DB {
 
     virtual Status
     Start() = 0;
+
     virtual Status
     Stop() = 0;
 
     virtual Status
-    CreateTable(meta::TableSchema& table_schema_) = 0;
+    CreateCollection(meta::CollectionSchema& table_schema_) = 0;
 
     virtual Status
-    DropTable(const std::string& table_id) = 0;
+    DropCollection(const std::string& collection_id) = 0;
 
     virtual Status
-    DescribeTable(meta::TableSchema& table_schema_) = 0;
+    DescribeCollection(meta::CollectionSchema& table_schema_) = 0;
 
     virtual Status
-    HasTable(const std::string& table_id, bool& has_or_not_) = 0;
+    HasCollection(const std::string& collection_id, bool& has_or_not) = 0;
 
     virtual Status
-    HasNativeTable(const std::string& table_id, bool& has_or_not_) = 0;
+    HasNativeCollection(const std::string& collection_id, bool& has_or_not) = 0;
 
     virtual Status
-    AllTables(std::vector<meta::TableSchema>& table_schema_array) = 0;
+    AllCollections(std::vector<meta::CollectionSchema>& table_schema_array) = 0;
 
     virtual Status
-    GetTableInfo(const std::string& table_id, TableInfo& table_info) = 0;
+    GetCollectionInfo(const std::string& collection_id, std::string& collection_info) = 0;
 
     virtual Status
-    GetTableRowCount(const std::string& table_id, uint64_t& row_count) = 0;
+    GetCollectionRowCount(const std::string& collection_id, uint64_t& row_count) = 0;
 
     virtual Status
-    PreloadTable(const std::string& table_id) = 0;
+    PreloadCollection(const std::string& collection_id) = 0;
 
     virtual Status
-    UpdateTableFlag(const std::string& table_id, int64_t flag) = 0;
+    UpdateCollectionFlag(const std::string& collection_id, int64_t flag) = 0;
 
     virtual Status
-    CreatePartition(const std::string& table_id, const std::string& partition_name,
+    CreatePartition(const std::string& collection_id, const std::string& partition_name,
                     const std::string& partition_tag) = 0;
+
+    virtual Status
+    HasPartition(const std::string& collection_id, const std::string& tag, bool& has_or_not) = 0;
 
     virtual Status
     DropPartition(const std::string& partition_name) = 0;
 
     virtual Status
-    DropPartitionByTag(const std::string& table_id, const std::string& partition_tag) = 0;
+    DropPartitionByTag(const std::string& collection_id, const std::string& partition_tag) = 0;
 
     virtual Status
-    ShowPartitions(const std::string& table_id, std::vector<meta::TableSchema>& partition_schema_array) = 0;
+    ShowPartitions(const std::string& collection_id, std::vector<meta::CollectionSchema>& partition_schema_array) = 0;
 
     virtual Status
-    InsertVectors(const std::string& table_id, const std::string& partition_tag, VectorsData& vectors) = 0;
+    InsertVectors(const std::string& collection_id, const std::string& partition_tag, VectorsData& vectors) = 0;
 
     virtual Status
-    DeleteVector(const std::string& table_id, IDNumber vector_id) = 0;
+    DeleteVector(const std::string& collection_id, IDNumber vector_id) = 0;
 
     virtual Status
-    DeleteVectors(const std::string& table_id, IDNumbers vector_ids) = 0;
+    DeleteVectors(const std::string& collection_id, IDNumbers vector_ids) = 0;
 
     virtual Status
-    Flush(const std::string& table_id) = 0;
+    Flush(const std::string& collection_id) = 0;
 
     virtual Status
     Flush() = 0;
 
     virtual Status
-    Compact(const std::string& table_id) = 0;
+    Compact(const std::string& collection_id, double threshold = 0.0) = 0;
 
     virtual Status
-    GetVectorByID(const std::string& table_id, const IDNumber& vector_id, VectorsData& vector) = 0;
+    GetVectorsByID(const std::string& collection_id, const IDNumbers& id_array,
+                   std::vector<engine::VectorsData>& vectors) = 0;
 
     virtual Status
-    GetVectorIDs(const std::string& table_id, const std::string& segment_id, IDNumbers& vector_ids) = 0;
+    GetEntitiesByID(const std::string& collection_id, const IDNumbers& id_array,
+                    std::vector<engine::VectorsData>& vectors, std::vector<engine::AttrsData>& attrs) = 0;
+
+    virtual Status
+    GetVectorIDs(const std::string& collection_id, const std::string& segment_id, IDNumbers& vector_ids) = 0;
 
     //    virtual Status
     //    Merge(const std::set<std::string>& table_ids) = 0;
 
     virtual Status
-    QueryByID(const std::shared_ptr<server::Context>& context, const std::string& table_id,
-              const std::vector<std::string>& partition_tags, uint64_t k, const milvus::json& extra_params,
-              IDNumber vector_id, ResultIds& result_ids, ResultDistances& result_distances) = 0;
+    QueryByIDs(const std::shared_ptr<server::Context>& context, const std::string& collection_id,
+               const std::vector<std::string>& partition_tags, uint64_t k, const milvus::json& extra_params,
+               const IDNumbers& id_array, ResultIds& result_ids, ResultDistances& result_distances) = 0;
 
     virtual Status
-    Query(const std::shared_ptr<server::Context>& context, const std::string& table_id,
+    Query(const std::shared_ptr<server::Context>& context, const std::string& collection_id,
           const std::vector<std::string>& partition_tags, uint64_t k, const milvus::json& extra_params,
           const VectorsData& vectors, ResultIds& result_ids, ResultDistances& result_distances) = 0;
 
     virtual Status
-    QueryByFileID(const std::shared_ptr<server::Context>& context, const std::string& table_id,
-                  const std::vector<std::string>& file_ids, uint64_t k, const milvus::json& extra_params,
-                  const VectorsData& vectors, ResultIds& result_ids, ResultDistances& result_distances) = 0;
+    QueryByFileID(const std::shared_ptr<server::Context>& context, const std::vector<std::string>& file_ids, uint64_t k,
+                  const milvus::json& extra_params, const VectorsData& vectors, ResultIds& result_ids,
+                  ResultDistances& result_distances) = 0;
 
     virtual Status
     Size(uint64_t& result) = 0;
 
     virtual Status
-    CreateIndex(const std::string& table_id, const TableIndex& index) = 0;
+    CreateIndex(const std::shared_ptr<server::Context>& context, const std::string& collection_id,
+                const CollectionIndex& index) = 0;
 
     virtual Status
-    DescribeIndex(const std::string& table_id, TableIndex& index) = 0;
+    DescribeIndex(const std::string& collection_id, CollectionIndex& index) = 0;
 
     virtual Status
-    DropIndex(const std::string& table_id) = 0;
+    DropIndex(const std::string& collection_id) = 0;
 
     virtual Status
     DropAll() = 0;
+
+    virtual Status
+    CreateHybridCollection(meta::CollectionSchema& collection_schema, meta::hybrid::FieldsSchema& fields_schema) = 0;
+
+    virtual Status
+    DescribeHybridCollection(meta::CollectionSchema& collection_schema, meta::hybrid::FieldsSchema& fields_schema) = 0;
+
+    virtual Status
+    InsertEntities(const std::string& collection_id, const std::string& partition_tag,
+                   const std::vector<std::string>& field_names, Entity& entity,
+                   std::unordered_map<std::string, meta::hybrid::DataType>& field_types) = 0;
+
+    virtual Status
+    HybridQuery(const std::shared_ptr<server::Context>& context, const std::string& collection_id,
+                const std::vector<std::string>& partition_tags, query::GeneralQueryPtr general_query,
+                query::QueryPtr query_ptr, std::vector<std::string>& field_name,
+                std::unordered_map<std::string, engine::meta::hybrid::DataType>& attr_type,
+                engine::QueryResult& result) = 0;
 };  // DB
 
 using DBPtr = std::shared_ptr<DB>;

@@ -21,7 +21,8 @@ namespace milvus {
 namespace server {
 
 Status
-InitLog(const std::string& log_config_file);
+InitLog(bool trace_enable, bool debug_enable, bool info_enable, bool warning_enable, bool error_enable,
+        bool fatal_enable, const std::string& logs_path, int64_t max_log_file_size, int64_t delete_exceeds);
 
 void
 RolloutHandler(const char* filename, std::size_t size, el::Level level);
@@ -32,6 +33,15 @@ RolloutHandler(const char* filename, std::size_t size, el::Level level);
 #else
 #define LOCATION_INFO ""
 #endif
+
+void
+LogConfigInFile(const std::string& path);
+
+void
+LogConfigInMem();
+
+void
+LogCpuInfo();
 
 }  // namespace server
 }  // namespace milvus

@@ -74,7 +74,7 @@ define_option(MILVUS_WITH_MYSQLPP "Build with MySQL++" ON)
 
 define_option(MILVUS_WITH_YAMLCPP "Build with yaml-cpp library" ON)
 
-if (MILVUS_ENABLE_PROFILING STREQUAL "ON")
+if (ENABLE_CPU_PROFILING STREQUAL "ON")
     define_option(MILVUS_WITH_LIBUNWIND "Build with libunwind" ON)
     define_option(MILVUS_WITH_GPERFTOOLS "Build with gperftools" ON)
 endif ()
@@ -87,7 +87,7 @@ define_option(MILVUS_WITH_OPENTRACING "Build with Opentracing" ON)
 
 define_option(MILVUS_WITH_FIU "Build with fiu" OFF)
 
-define_option(MILVUS_WITH_AWS "Build with aws" ON)
+define_option(MILVUS_WITH_AWS "Build with aws" OFF)
 
 define_option(MILVUS_WITH_OATPP "Build with oatpp" ON)
 

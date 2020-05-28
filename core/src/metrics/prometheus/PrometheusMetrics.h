@@ -293,7 +293,7 @@ class PrometheusMetrics : public MetricsBase {
     PushToGateway() override {
         if (startup_) {
             if (gateway_->Push() != 200) {
-                ENGINE_LOG_WARNING << "Metrics pushgateway failed";
+                LOG_ENGINE_WARNING_ << "Metrics pushgateway failed";
             }
         }
     }
@@ -440,7 +440,7 @@ class PrometheusMetrics : public MetricsBase {
     prometheus::Histogram& all_build_index_duration_seconds_histogram_ =
         all_build_index_duration_seconds_.Add({}, BucketBoundaries{2e6, 4e6, 6e6, 8e6, 1e7});
 
-    // record duration of merging mem table
+    // record duration of merging mem collection
     prometheus::Family<prometheus::Histogram>& mem_table_merge_duration_seconds_ =
         prometheus::BuildHistogram()
             .Name("mem_table_merge_duration_microseconds")

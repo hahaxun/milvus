@@ -19,6 +19,7 @@
 #include "MetaTypes.h"
 #include "db/Options.h"
 #include "db/Types.h"
+#include "db/meta/FilesHolder.h"
 #include "utils/Status.h"
 
 namespace milvus {
@@ -28,6 +29,11 @@ namespace meta {
 static const char* META_ENVIRONMENT = "Environment";
 static const char* META_TABLES = "Tables";
 static const char* META_TABLEFILES = "TableFiles";
+static const char* META_COLLECTIONS = "Collections";
+static const char* META_FIELDS = "Fields";
+static const char* META_COLLECTIONFILES = "CollectionFiles";
+
+class FilesHolder;
 
 class Meta {
     /*
@@ -35,7 +41,7 @@ class Meta {
     class CleanUpFilter {
      public:
         virtual bool
-        IsIgnored(const TableFileSchema& schema) = 0;
+        IsIgnored(const SegmentSchema& schema) = 0;
     };
 */
 
@@ -43,89 +49,92 @@ class Meta {
     virtual ~Meta() = default;
 
     virtual Status
-    CreateTable(TableSchema& table_schema) = 0;
+    CreateCollection(CollectionSchema& table_schema) = 0;
 
     virtual Status
-    DescribeTable(TableSchema& table_schema) = 0;
+    DescribeCollection(CollectionSchema& table_schema) = 0;
 
     virtual Status
-    HasTable(const std::string& table_id, bool& has_or_not) = 0;
+    HasCollection(const std::string& collection_id, bool& has_or_not, bool is_root = false) = 0;
 
     virtual Status
-    AllTables(std::vector<TableSchema>& table_schema_array) = 0;
+    AllCollections(std::vector<CollectionSchema>& table_schema_array) = 0;
 
     virtual Status
-    UpdateTableFlag(const std::string& table_id, int64_t flag) = 0;
+    UpdateCollectionFlag(const std::string& collection_id, int64_t flag) = 0;
 
     virtual Status
-    UpdateTableFlushLSN(const std::string& table_id, uint64_t flush_lsn) = 0;
+    UpdateCollectionFlushLSN(const std::string& collection_id, uint64_t flush_lsn) = 0;
 
     virtual Status
-    GetTableFlushLSN(const std::string& table_id, uint64_t& flush_lsn) = 0;
+    GetCollectionFlushLSN(const std::string& collection_id, uint64_t& flush_lsn) = 0;
 
     virtual Status
-    GetTableFilesByFlushLSN(uint64_t flush_lsn, TableFilesSchema& table_files) = 0;
+    DropCollection(const std::string& collection_id) = 0;
 
     virtual Status
-    DropTable(const std::string& table_id) = 0;
+    DeleteCollectionFiles(const std::string& collection_id) = 0;
 
     virtual Status
-    DeleteTableFiles(const std::string& table_id) = 0;
+    CreateCollectionFile(SegmentSchema& file_schema) = 0;
 
     virtual Status
-    CreateTableFile(TableFileSchema& file_schema) = 0;
+    GetCollectionFiles(const std::string& collection_id, const std::vector<size_t>& ids, FilesHolder& files_holder) = 0;
 
     virtual Status
-    GetTableFiles(const std::string& table_id, const std::vector<size_t>& ids, TableFilesSchema& table_files) = 0;
+    GetCollectionFilesBySegmentId(const std::string& segment_id, FilesHolder& files_holder) = 0;
 
     virtual Status
-    GetTableFilesBySegmentId(const std::string& segment_id, TableFilesSchema& table_files) = 0;
+    UpdateCollectionFile(SegmentSchema& file_schema) = 0;
 
     virtual Status
-    UpdateTableFile(TableFileSchema& file_schema) = 0;
+    UpdateCollectionFiles(SegmentsSchema& files) = 0;
 
     virtual Status
-    UpdateTableFiles(TableFilesSchema& files) = 0;
+    UpdateCollectionFilesRowCount(SegmentsSchema& files) = 0;
 
     virtual Status
-    UpdateTableFilesRowCount(TableFilesSchema& files) = 0;
+    UpdateCollectionIndex(const std::string& collection_id, const CollectionIndex& index) = 0;
 
     virtual Status
-    UpdateTableIndex(const std::string& table_id, const TableIndex& index) = 0;
+    UpdateCollectionFilesToIndex(const std::string& collection_id) = 0;
 
     virtual Status
-    UpdateTableFilesToIndex(const std::string& table_id) = 0;
+    DescribeCollectionIndex(const std::string& collection_id, CollectionIndex& index) = 0;
 
     virtual Status
-    DescribeTableIndex(const std::string& table_id, TableIndex& index) = 0;
+    DropCollectionIndex(const std::string& collection_id) = 0;
 
     virtual Status
-    DropTableIndex(const std::string& table_id) = 0;
-
-    virtual Status
-    CreatePartition(const std::string& table_name, const std::string& partition_name, const std::string& tag,
+    CreatePartition(const std::string& collection_name, const std::string& partition_name, const std::string& tag,
                     uint64_t lsn) = 0;
+
+    virtual Status
+    HasPartition(const std::string& collection_id, const std::string& tag, bool& has_or_not) = 0;
 
     virtual Status
     DropPartition(const std::string& partition_name) = 0;
 
     virtual Status
-    ShowPartitions(const std::string& table_name, std::vector<meta::TableSchema>& partition_schema_array) = 0;
+    ShowPartitions(const std::string& collection_name, std::vector<meta::CollectionSchema>& partition_schema_array) = 0;
 
     virtual Status
-    GetPartitionName(const std::string& table_name, const std::string& tag, std::string& partition_name) = 0;
+    GetPartitionName(const std::string& collection_name, const std::string& tag, std::string& partition_name) = 0;
 
     virtual Status
-    FilesToSearch(const std::string& table_id, const std::vector<size_t>& ids, TableFilesSchema& files) = 0;
+    FilesToSearch(const std::string& collection_id, FilesHolder& files_holder) = 0;
 
     virtual Status
-    FilesToMerge(const std::string& table_id, TableFilesSchema& files) = 0;
+    FilesToMerge(const std::string& collection_id, FilesHolder& files_holder) = 0;
 
     virtual Status
-    FilesToIndex(TableFilesSchema&) = 0;
+    FilesToIndex(FilesHolder& files_holder) = 0;
 
     virtual Status
-    FilesByType(const std::string& table_id, const std::vector<int>& file_types, TableFilesSchema& table_files) = 0;
+    FilesByType(const std::string& collection_id, const std::vector<int>& file_types, FilesHolder& files_holder) = 0;
+
+    virtual Status
+    FilesByID(const std::vector<size_t>& ids, FilesHolder& files_holder) = 0;
 
     virtual Status
     Size(uint64_t& result) = 0;
@@ -143,13 +152,22 @@ class Meta {
     DropAll() = 0;
 
     virtual Status
-    Count(const std::string& table_id, uint64_t& result) = 0;
+    Count(const std::string& collection_id, uint64_t& result) = 0;
 
     virtual Status
     SetGlobalLastLSN(uint64_t lsn) = 0;
 
     virtual Status
     GetGlobalLastLSN(uint64_t& lsn) = 0;
+
+    virtual Status
+    CreateHybridCollection(CollectionSchema& collection_schema, hybrid::FieldsSchema& fields_schema) = 0;
+
+    virtual Status
+    DescribeHybridCollection(CollectionSchema& collection_schema, hybrid::FieldsSchema& fields_schema) = 0;
+
+    virtual Status
+    CreateHybridCollectionFile(SegmentSchema& file_schema) = 0;
 };  // MetaData
 
 using MetaPtr = std::shared_ptr<Meta>;

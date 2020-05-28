@@ -13,27 +13,27 @@ message KeyValuePair {
 }
 
 /**
- * @brief Table name
+ * @brief Collection name
  */
-message TableName {
-    string table_name = 1;
+message CollectionName {
+    string collection_name = 1;
 }
 
 /**
- * @brief Table name list
+ * @brief Collection name list
  */
-message TableNameList {
+message CollectionNameList {
     Status status = 1;
-    repeated string table_names = 2;
+    repeated string collection_names = 2;
 }
 
 /**
- * @brief Table schema
+ * @brief Collection schema
  * metric_type: 1-L2, 2-IP
  */
-message TableSchema {
+message CollectionSchema {
     Status status = 1;
-    string table_name = 2;
+    string collection_name = 2;
     int64 dimension = 3;
     int64 index_file_size = 4;
     int32 metric_type = 5;
@@ -44,7 +44,7 @@ message TableSchema {
  * @brief Params of partition
  */
 message PartitionParam {
-    string table_name = 1;
+    string collection_name = 1;
     string tag = 2;
 }
 
@@ -68,7 +68,7 @@ message RowRecord {
  * @brief Params to be inserted
  */
 message InsertParam {
-    string table_name = 1;
+    string collection_name = 1;
     repeated RowRecord row_record_array = 2;
     repeated int64 row_id_array = 3;            //optional
     string partition_tag = 4;
@@ -87,7 +87,7 @@ message VectorIds {
  * @brief Params for searching vector
  */
 message SearchParam {
-    string table_name = 1;
+    string collection_name = 1;
     repeated string partition_tag_array = 2;
     repeated RowRecord query_record_array = 3;
     int64 topk = 4;
@@ -106,9 +106,9 @@ message SearchInFilesParam {
  * @brief Params for searching vector by ID
  */
 message SearchByIDParam {
-    string table_name = 1;
+    string collection_name = 1;
     repeated string partition_tag_array = 2;
-    int64 id = 3;
+    repeated int64 id_array = 3;
     int64 topk = 4;
     repeated KeyValuePair extra_params = 5;
 }
@@ -140,11 +140,11 @@ message BoolReply {
 }
 
 /**
- * @brief Return table row count
+ * @brief Return collection row count
  */
-message TableRowCount {
+message CollectionRowCount {
     Status status = 1;
-    int64 table_row_count = 2;
+    int64 collection_row_count = 2;
 }
 
 /**
@@ -160,7 +160,7 @@ message Command {
  */
 message IndexParam {
     Status status = 1;
-    string table_name = 2;
+    string collection_name = 2;
     int32 index_type = 3;
     repeated KeyValuePair extra_params = 4;
 }
@@ -169,135 +169,334 @@ message IndexParam {
  * @brief Flush params
  */
 message FlushParam {
-    repeated string table_name_array = 1;
+    repeated string collection_name_array = 1;
 }
 
 /**
  * @brief Flush params
  */
 message DeleteByIDParam {
-    string table_name = 1;
+    string collection_name = 1;
     repeated int64 id_array = 2;
 }
 
 /**
- * @brief segment statistics
+ * @brief collection information
  */
-message SegmentStat {
-    string segment_name = 1;
-    int64 row_count = 2;
-    string index_name = 3;
-    int64 data_size = 4;
-}
-
-/**
- * @brief table statistics
- */
-message PartitionStat {
-    string tag = 1;
-    int64 total_row_count = 2;
-    repeated SegmentStat segments_stat = 3;
-}
-
-/**
- * @brief table information
- */
-message TableInfo {
+message CollectionInfo {
     Status status = 1;
-    int64 total_row_count = 2;
-    repeated PartitionStat partitions_stat = 3;
+    string json_info = 2;
 }
 
 /**
- * @brief vector identity
+ * @brief vectors identity
  */
-message VectorIdentity {
-    string table_name = 1;
-    int64 id = 2;
+message VectorsIdentity {
+    string collection_name = 1;
+    repeated int64 id_array = 2;
 }
 
 /**
  * @brief vector data
  */
-message VectorData {
+message VectorsData {
     Status status = 1;
-    RowRecord vector_data = 2;
+    repeated RowRecord vectors_data = 2;
 }
 
 /**
  * @brief get vector ids from a segment parameters
  */
 message GetVectorIDsParam {
-    string table_name = 1;
+    string collection_name = 1;
     string segment_name = 2;
 }
 
+
+/********************************************************************************************************************/
+
+enum DataType {
+    NULL = 0;
+    INT8 = 1;
+    INT16 = 2;
+    INT32 = 3;
+    INT64 = 4;
+
+    STRING = 20;
+
+    BOOL = 30;
+
+    FLOAT = 40;
+    DOUBLE = 41;
+
+    VECTOR = 100;
+    UNKNOWN = 9999;
+}
+
+///////////////////////////////////////////////////////////////////
+
+message VectorFieldParam {
+    int64 dimension = 1;
+}
+
+message FieldType {
+    oneof value {
+        DataType data_type = 1;
+        VectorFieldParam vector_param = 2;
+    }
+}
+
+message FieldParam {
+    uint64 id = 1;
+    string name = 2;
+    FieldType type = 3;
+    repeated KeyValuePair extra_params = 4;
+}
+
+message VectorFieldRecord {
+    repeated RowRecord value = 1;
+}
+
+message FieldValue {
+    oneof value {
+        int64 int64_value = 1;
+        double double_value = 2;
+        string string_value = 3;
+        bool  bool_value = 4;
+        VectorFieldRecord vector_value = 5;
+    }
+}
+
+///////////////////////////////////////////////////////////////////
+
+message Mapping {
+    Status status = 1;
+    uint64 collection_id = 2;
+    string collection_name = 3;
+    repeated FieldParam fields = 4;
+}
+
+message MappingList {
+    Status status = 1;
+    repeated Mapping mapping_list = 2;
+}
+
+///////////////////////////////////////////////////////////////////
+
+message TermQuery {
+    string field_name = 1;
+    repeated int64 int_value = 2;
+    repeated double double_value = 3;
+    int64 value_num = 4;
+    float boost = 5;
+    repeated KeyValuePair extra_params = 6;
+}
+
+enum CompareOperator {
+    LT = 0;
+    LTE = 1;
+    EQ = 2;
+    GT = 3;
+    GTE = 4;
+    NE = 5;
+}
+
+message CompareExpr {
+    CompareOperator operator = 1;
+    string operand = 2;
+}
+
+message RangeQuery {
+    string field_name = 1;
+    repeated CompareExpr operand = 2;
+    float boost = 3;
+    repeated KeyValuePair extra_params = 4;
+}
+
+message VectorQuery {
+    string field_name = 1;
+    float query_boost = 2;
+    repeated RowRecord records = 3;
+    int64 topk = 4;
+    repeated KeyValuePair extra_params = 5;
+}
+
+enum Occur {
+    INVALID = 0;
+    MUST = 1;
+    SHOULD = 2;
+    MUST_NOT = 3;
+}
+
+message BooleanQuery {
+    Occur occur = 1;
+    repeated GeneralQuery general_query = 2;
+}
+
+message GeneralQuery {
+    oneof query {
+        BooleanQuery boolean_query = 1;
+        TermQuery term_query = 2;
+        RangeQuery range_query = 3;
+        VectorQuery vector_query = 4;
+    }
+}
+
+message VectorParam {
+    string json = 1;
+    repeated RowRecord row_record = 2;
+}
+
+message HSearchParam {
+    string collection_name = 1;
+    repeated string partition_tag_array = 2;
+    repeated VectorParam vector_param = 3;
+    string dsl = 4;
+    repeated KeyValuePair extra_params = 5;
+}
+
+message HSearchParamPB {
+    string collection_name = 1;
+    repeated string partition_tag_array = 2;
+    GeneralQuery general_query = 3;
+    repeated KeyValuePair extra_params = 4;
+}
+
+message HSearchInSegmentsParam {
+    repeated string segment_id_array = 1;
+    HSearchParamPB search_param = 2;
+}
+
+///////////////////////////////////////////////////////////////////
+
+message AttrRecord {
+    repeated int64 int_value = 1;
+    repeated double double_value = 2;
+}
+
+message HEntity {
+    Status status = 1;
+    repeated int64 entity_id = 2;
+    repeated string field_names = 3;
+    repeated DataType data_types = 4;
+    int64 row_num = 5;
+    repeated AttrRecord attr_data = 6;
+    repeated VectorFieldRecord vector_data = 7;
+}
+
+message HQueryResult {
+    Status status = 1;
+    HEntity entity = 2;
+    int64 row_num = 3;
+    repeated float score = 4;
+    repeated float distance = 5;
+    repeated KeyValuePair extra_params = 6;
+}
+
+message HInsertParam {
+    string collection_name = 1;
+    string partition_tag = 2;
+    HEntity entity = 3;
+    repeated int64 entity_id_array = 4;
+    repeated KeyValuePair extra_params = 5;
+}
+
+message HEntityIdentity {
+    string collection_name = 1;
+    repeated int64 id = 2;
+}
+
+message HEntityIDs {
+    Status status = 1;
+    repeated int64 entity_id_array = 2;
+}
+
+message HGetEntityIDsParam {
+    string collection_name = 1;
+    string segment_name = 2;
+}
+
+message HDeleteByIDParam {
+    string collection_name = 1;
+    repeated int64 id_array = 2;
+}
+
+///////////////////////////////////////////////////////////////////
+
+message HIndexParam {
+    Status status = 1;
+    string collection_name = 2;
+    int32 index_type = 3;
+    repeated KeyValuePair extra_params = 4;
+}
+
+
 service MilvusService {
     /**
-     * @brief This method is used to create table
+     * @brief This method is used to create collection
      *
-     * @param TableSchema, use to provide table information to be created.
+     * @param CollectionSchema, use to provide collection information to be created.
      *
      * @return Status
      */
-    rpc CreateTable(TableSchema) returns (Status){}
+    rpc CreateCollection(CollectionSchema) returns (Status){}
 
     /**
-     * @brief This method is used to test table existence.
+     * @brief This method is used to test collection existence.
      *
-     * @param TableName, table name is going to be tested.
+     * @param CollectionName, collection name is going to be tested.
      *
      * @return BoolReply
      */
-    rpc HasTable(TableName) returns (BoolReply) {}
+    rpc HasCollection(CollectionName) returns (BoolReply) {}
 
     /**
-     * @brief This method is used to get table schema.
+     * @brief This method is used to get collection schema.
      *
-     * @param TableName, target table name.
+     * @param CollectionName, target collection name.
      *
-     * @return TableSchema
+     * @return CollectionSchema
      */
-    rpc DescribeTable(TableName) returns (TableSchema) {}
+    rpc DescribeCollection(CollectionName) returns (CollectionSchema) {}
 
     /**
-     * @brief This method is used to get table schema.
+     * @brief This method is used to get collection schema.
      *
-     * @param TableName, target table name.
+     * @param CollectionName, target collection name.
      *
-     * @return TableRowCount
+     * @return CollectionRowCount
      */
-    rpc CountTable(TableName) returns (TableRowCount) {}
+    rpc CountCollection(CollectionName) returns (CollectionRowCount) {}
 
     /**
-     * @brief This method is used to list all tables.
+     * @brief This method is used to list all collections.
      *
      * @param Command, dummy parameter.
      *
-     * @return TableNameList
+     * @return CollectionNameList
      */
-    rpc ShowTables(Command) returns (TableNameList) {}
+    rpc ShowCollections(Command) returns (CollectionNameList) {}
 
     /**
-     * @brief This method is used to get table detail information.
+     * @brief This method is used to get collection detail information.
      *
-     * @param TableName, target table name.
+     * @param CollectionName, target collection name.
      *
-     * @return TableInfo
+     * @return CollectionInfo
      */
-    rpc ShowTableInfo(TableName) returns (TableInfo) {}
+    rpc ShowCollectionInfo(CollectionName) returns (CollectionInfo) {}
 
     /**
-     * @brief This method is used to delete table.
+     * @brief This method is used to delete collection.
      *
-     * @param TableName, table name is going to be deleted.
+     * @param CollectionName, collection name is going to be deleted.
      *
-     * @return TableNameList
+     * @return CollectionNameList
      */
-    rpc DropTable(TableName) returns (Status) {}
+    rpc DropCollection(CollectionName) returns (Status) {}
 
     /**
-     * @brief This method is used to build index by table in sync mode.
+     * @brief This method is used to build index by collection in sync mode.
      *
      * @param IndexParam, index paramters.
      *
@@ -308,20 +507,20 @@ service MilvusService {
     /**
      * @brief This method is used to describe index
      *
-     * @param TableName, target table name.
+     * @param CollectionName, target collection name.
      *
      * @return IndexParam
      */
-    rpc DescribeIndex(TableName) returns (IndexParam) {}
+    rpc DescribeIndex(CollectionName) returns (IndexParam) {}
 
     /**
      * @brief This method is used to drop index
      *
-     * @param TableName, target table name.
+     * @param CollectionName, target collection name.
      *
      * @return Status
      */
-    rpc DropIndex(TableName) returns (Status) {}
+    rpc DropIndex(CollectionName) returns (Status) {}
 
     /**
      * @brief This method is used to create partition
@@ -333,13 +532,22 @@ service MilvusService {
     rpc CreatePartition(PartitionParam) returns (Status) {}
 
     /**
+     * @brief This method is used to test partition existence.
+     *
+     * @param PartitionParam, target partition.
+     *
+     * @return BoolReply
+     */
+    rpc HasPartition(PartitionParam) returns (BoolReply) {}
+
+    /**
      * @brief This method is used to show partition information
      *
-     * @param TableName, target table name.
+     * @param CollectionName, target collection name.
      *
      * @return PartitionList
      */
-    rpc ShowPartitions(TableName) returns (PartitionList) {}
+    rpc ShowPartitions(CollectionName) returns (PartitionList) {}
 
     /**
      * @brief This method is used to drop partition
@@ -351,7 +559,7 @@ service MilvusService {
     rpc DropPartition(PartitionParam) returns (Status) {}
 
     /**
-     * @brief This method is used to add vector array to table.
+     * @brief This method is used to add vector array to collection.
      *
      * @param InsertParam, insert parameters.
      *
@@ -360,25 +568,25 @@ service MilvusService {
     rpc Insert(InsertParam) returns (VectorIds) {}
 
     /**
-     * @brief This method is used to get vector data by id.
+     * @brief This method is used to get vectors data by id array.
      *
-     * @param VectorIdentity, target vector id.
+     * @param VectorsIdentity, target vector id array.
      *
-     * @return VectorData
+     * @return VectorsData
      */
-    rpc GetVectorByID(VectorIdentity) returns (VectorData) {}
+    rpc GetVectorsByID(VectorsIdentity) returns (VectorsData) {}
 
     /**
      * @brief This method is used to get vector ids from a segment
      *
-     * @param GetVectorIDsParam, target table and segment
+     * @param GetVectorIDsParam, target collection and segment
      *
      * @return VectorIds
      */
     rpc GetVectorIDs(GetVectorIDsParam) returns (VectorIds) {}
 
     /**
-     * @brief This method is used to query vector in table.
+     * @brief This method is used to query vector in collection.
      *
      * @param SearchParam, search parameters.
      *
@@ -423,13 +631,13 @@ service MilvusService {
     rpc DeleteByID(DeleteByIDParam) returns (Status) {}
 
     /**
-     * @brief This method is used to preload table
+     * @brief This method is used to preload collection
      *
-     * @param TableName, target table name.
+     * @param CollectionName, target collection name.
      *
      * @return Status
      */
-    rpc PreloadTable(TableName) returns (Status) {}
+    rpc PreloadCollection(CollectionName) returns (Status) {}
 
     /**
      * @brief This method is used to flush buffer into storage.
@@ -441,11 +649,55 @@ service MilvusService {
     rpc Flush(FlushParam) returns (Status) {}
 
     /**
-     * @brief This method is used to compact table
+     * @brief This method is used to compact collection
      *
-     * @param TableName, target table name.
+     * @param CollectionName, target collection name.
      *
      * @return Status
      */
-    rpc Compact(TableName) returns (Status) {}
+    rpc Compact(CollectionName) returns (Status) {}
+
+    /********************************New Interface********************************************/
+
+    rpc CreateHybridCollection(Mapping) returns (Status) {}
+
+    rpc HasHybridCollection(CollectionName) returns (BoolReply) {}
+
+    rpc DropHybridCollection(CollectionName) returns (Status) {}
+
+    rpc DescribeHybridCollection(CollectionName) returns (Mapping) {}
+
+    rpc CountHybridCollection(CollectionName) returns (CollectionRowCount) {}
+
+    rpc ShowHybridCollections(Command) returns (MappingList) {}
+
+    rpc ShowHybridCollectionInfo (CollectionName) returns (CollectionInfo) {}
+
+    rpc PreloadHybridCollection(CollectionName) returns (Status) {}
+
+    ///////////////////////////////////////////////////////////////////
+
+    //    rpc CreateIndex(IndexParam) returns (Status) {}
+    //
+    //    rpc DescribeIndex(CollectionName) returns (IndexParam) {}
+    //
+    //    rpc DropIndex(CollectionName) returns (Status) {}
+
+    ///////////////////////////////////////////////////////////////////
+
+    rpc InsertEntity(HInsertParam) returns (HEntityIDs) {}
+
+    rpc HybridSearchPB(HSearchParamPB) returns (HQueryResult) {}
+
+    rpc HybridSearch(HSearchParam) returns (HQueryResult) {}
+
+    rpc HybridSearchInSegments(HSearchInSegmentsParam) returns (TopKQueryResult) {}
+
+    rpc GetEntityByID(VectorsIdentity) returns (HEntity) {}
+
+    rpc GetEntityIDs(HGetEntityIDsParam) returns (HEntityIDs) {}
+
+    rpc DeleteEntitiesByID(HDeleteByIDParam) returns (Status) {}
+
+    ///////////////////////////////////////////////////////////////////
 }

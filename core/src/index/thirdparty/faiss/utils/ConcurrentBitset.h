@@ -27,11 +27,29 @@ class ConcurrentBitset {
  public:
     using id_type_t = int64_t;
 
-    explicit ConcurrentBitset(id_type_t size);
+    explicit ConcurrentBitset(id_type_t size, uint8_t init_value = 0);
 
     //    ConcurrentBitset(const ConcurrentBitset&) = delete;
     //    ConcurrentBitset&
     //    operator=(const ConcurrentBitset&) = delete;
+
+    std::vector<std::atomic<uint8_t>>&
+    bitset();
+
+    ConcurrentBitset&
+    operator&=(ConcurrentBitset& bitset);
+
+    std::shared_ptr<ConcurrentBitset>
+    operator&(std::shared_ptr<ConcurrentBitset>& bitset);
+
+    ConcurrentBitset&
+    operator|=(ConcurrentBitset& bitset);
+
+    std::shared_ptr<ConcurrentBitset>
+    operator|(std::shared_ptr<ConcurrentBitset>& bitset);
+
+    ConcurrentBitset&
+    operator^=(ConcurrentBitset& bitset);
 
     bool
     test(id_type_t id);
@@ -42,16 +60,21 @@ class ConcurrentBitset {
     void
     clear(id_type_t id);
 
-    id_type_t
+    size_t
+    capacity();
+
+    size_t
     size();
 
-    const unsigned char*
-    bitset();
+    const uint8_t*
+    data();
+
+    uint8_t*
+    mutable_data();
 
  private:
-    id_type_t size_;
-    std::vector<std::atomic<unsigned char>> bitset_;
-
+    size_t capacity_;
+    std::vector<std::atomic<uint8_t>> bitset_;
 };
 
 using ConcurrentBitsetPtr = std::shared_ptr<ConcurrentBitset>;

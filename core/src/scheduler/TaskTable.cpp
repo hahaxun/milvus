@@ -149,7 +149,7 @@ TaskTableItem::Dump() const {
 std::vector<uint64_t>
 TaskTable::PickToLoad(uint64_t limit) {
 #if 1
-    TimeRecorder rc("");
+    // TimeRecorder rc("");
     std::vector<uint64_t> indexes;
     bool cross = false;
 
@@ -173,7 +173,7 @@ TaskTable::PickToLoad(uint64_t limit) {
             // if task is a build index task, limit it
             if (task->Type() == TaskType::BuildIndexTask && task->path().Current() == "cpu") {
                 if (BuildMgrInst::GetInstance()->NumOfAvailable() < 1) {
-                    SERVER_LOG_WARNING << "BuildMgr doesnot have available place for building index";
+                    LOG_SERVER_WARNING_ << "BuildMgr doesnot have available place for building index";
                     continue;
                 }
             }
@@ -182,13 +182,13 @@ TaskTable::PickToLoad(uint64_t limit) {
             ++pick_count;
         }
     }
-    rc.ElapseFromBegin("PickToLoad ");
+    // rc.ElapseFromBegin("PickToLoad ");
     return indexes;
 #else
     size_t count = 0;
     for (uint64_t j = last_finish_ + 1; j < table_.size(); ++j) {
         if (not table_[j]) {
-            SERVER_LOG_WARNING << "table[" << j << "] is nullptr";
+            LOG_SERVER_WARNING_ << "collection[" << j << "] is nullptr";
         }
 
         if (table_[j]->task->path().Current() == "cpu") {
@@ -233,7 +233,7 @@ TaskTable::PickToLoad(uint64_t limit) {
 
 std::vector<uint64_t>
 TaskTable::PickToExecute(uint64_t limit) {
-    TimeRecorder rc("");
+    // TimeRecorder rc("");
     std::vector<uint64_t> indexes;
     bool cross = false;
     uint64_t available_begin = table_.front() + 1;
@@ -254,7 +254,7 @@ TaskTable::PickToExecute(uint64_t limit) {
             ++pick_count;
         }
     }
-    rc.ElapseFromBegin("PickToExecute ");
+    // rc.ElapseFromBegin("PickToExecute ");
     return indexes;
 }
 

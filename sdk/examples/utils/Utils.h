@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include "BooleanQuery.h"
 #include "MilvusApi.h"
 #include "thirdparty/nlohmann/json.hpp"
 
@@ -53,8 +54,8 @@ class Utils {
     PrintIndexParam(const milvus::IndexParam& index_param);
 
     static void
-    BuildEntities(int64_t from, int64_t to, std::vector<milvus::Entity>& entity_array,
-                  std::vector<int64_t>& entity_ids, int64_t dimension);
+    BuildEntities(int64_t from, int64_t to, std::vector<milvus::Entity>& entity_array, std::vector<int64_t>& entity_ids,
+                  int64_t dimension);
 
     static void
     PrintSearchResult(const std::vector<std::pair<int64_t, milvus::Entity>>& entity_array,
@@ -71,7 +72,16 @@ class Utils {
              milvus::TopKQueryResult& topk_query_result);
 
     static void
-    PrintCollectionInfo(const milvus::CollectionInfo& collection_info);
+    ConstructVector(uint64_t nq, uint64_t dimension, std::vector<milvus::Entity>& query_vector);
+
+    static std::vector<milvus::LeafQueryPtr>
+    GenLeafQuery();
+
+    static void
+    GenDSLJson(nlohmann::json& dsl_json, nlohmann::json& vector_param_json);
+
+    static void
+    PrintTopKHybridQueryResult(milvus::TopKHybridQueryResult& topk_query_result);
 };
 
 }  // namespace milvus_sdk

@@ -14,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -26,12 +27,11 @@
 #include "server/context/Context.h"
 #include "server/delivery/RequestHandler.h"
 #include "server/web_impl/Types.h"
-#include "server/web_impl/dto/CmdDto.hpp"
+#include "server/web_impl/dto/CollectionDto.hpp"
 #include "server/web_impl/dto/ConfigDto.hpp"
 #include "server/web_impl/dto/DevicesDto.hpp"
 #include "server/web_impl/dto/IndexDto.hpp"
 #include "server/web_impl/dto/PartitionDto.hpp"
-#include "server/web_impl/dto/TableDto.hpp"
 #include "server/web_impl/dto/VectorDto.hpp"
 #include "thirdparty/nlohmann/json.hpp"
 #include "utils/Status.h"
@@ -78,45 +78,29 @@ class WebRequestHandler {
     }
 
  private:
-    Status
-    ParseQueryInteger(const OQueryParams& query_params, const std::string& key, int64_t& value, bool nullable = true);
-
-    Status
-    ParseQueryStr(const OQueryParams& query_params, const std::string& key, std::string& value, bool nullable = true);
-
-    Status
-    ParseQueryBool(const OQueryParams& query_params, const std::string& key, bool& value, bool nullable = true);
-
- private:
     void
     AddStatusToJson(nlohmann::json& json, int64_t code, const std::string& msg);
 
     Status
-    ParseSegmentStat(const SegmentStat& seg_stat, nlohmann::json& json);
-
-    Status
-    ParsePartitionStat(const PartitionStat& par_stat, nlohmann::json& json);
-
-    Status
-    IsBinaryTable(const std::string& table_name, bool& bin);
+    IsBinaryCollection(const std::string& collection_name, bool& bin);
 
     Status
     CopyRecordsFromJson(const nlohmann::json& json, engine::VectorsData& vectors, bool bin);
 
  protected:
     Status
-    GetTableMetaInfo(const std::string& table_name, nlohmann::json& json_out);
+    GetCollectionMetaInfo(const std::string& collection_name, nlohmann::json& json_out);
 
     Status
-    GetTableStat(const std::string& table_name, nlohmann::json& json_out);
+    GetCollectionStat(const std::string& collection_name, nlohmann::json& json_out);
 
     Status
-    GetSegmentVectors(const std::string& table_name, const std::string& segment_name, int64_t page_size, int64_t offset,
-                      nlohmann::json& json_out);
+    GetSegmentVectors(const std::string& collection_name, const std::string& segment_name, int64_t page_size,
+                      int64_t offset, nlohmann::json& json_out);
 
     Status
-    GetSegmentIds(const std::string& table_name, const std::string& segment_name, int64_t page_size, int64_t offset,
-                  nlohmann::json& json_out);
+    GetSegmentIds(const std::string& collection_name, const std::string& segment_name, int64_t page_size,
+                  int64_t offset, nlohmann::json& json_out);
 
     Status
     CommandLine(const std::string& cmd, std::string& reply);
@@ -125,7 +109,7 @@ class WebRequestHandler {
     Cmd(const std::string& cmd, std::string& result_str);
 
     Status
-    PreLoadTable(const nlohmann::json& json, std::string& result_str);
+    PreLoadCollection(const nlohmann::json& json, std::string& result_str);
 
     Status
     Flush(const nlohmann::json& json, std::string& result_str);
@@ -140,13 +124,25 @@ class WebRequestHandler {
     SetConfig(const nlohmann::json& json, std::string& result_str);
 
     Status
-    Search(const std::string& table_name, const nlohmann::json& json, std::string& result_str);
+    Search(const std::string& collection_name, const nlohmann::json& json, std::string& result_str);
 
     Status
-    DeleteByIDs(const std::string& table_name, const nlohmann::json& json, std::string& result_str);
+    ProcessLeafQueryJson(const nlohmann::json& json, query::BooleanQueryPtr& boolean_query);
 
     Status
-    GetVectorsByIDs(const std::string& table_name, const std::vector<int64_t>& ids, nlohmann::json& json_out);
+    ProcessBoolQueryJson(const nlohmann::json& query_json, query::BooleanQueryPtr& boolean_query);
+
+    Status
+    HybridSearch(const std::string& collection_name, const nlohmann::json& json, std::string& result_str);
+
+    Status
+    DeleteByIDs(const std::string& collection_name, const nlohmann::json& json, std::string& result_str);
+
+    Status
+    GetVectorsByIDs(const std::string& collection_name, const std::vector<int64_t>& ids, nlohmann::json& json_out);
+
+    Status
+    GetEntityByIDs(const std::string& collection_name, const std::vector<int64_t>& ids, nlohmann::json& json_out);
 
  public:
     WebRequestHandler() {
@@ -173,44 +169,47 @@ class WebRequestHandler {
 #endif
 
     StatusDto::ObjectWrapper
-    CreateTable(const TableRequestDto::ObjectWrapper& table_schema);
+    CreateCollection(const CollectionRequestDto::ObjectWrapper& table_schema);
     StatusDto::ObjectWrapper
-    ShowTables(const OQueryParams& query_params, OString& result);
+    ShowCollections(const OQueryParams& query_params, OString& result);
 
     StatusDto::ObjectWrapper
-    GetTable(const OString& table_name, const OQueryParams& query_params, OString& result);
+    CreateHybridCollection(const OString& body);
 
     StatusDto::ObjectWrapper
-    DropTable(const OString& table_name);
+    GetCollection(const OString& collection_name, const OQueryParams& query_params, OString& result);
 
     StatusDto::ObjectWrapper
-    CreateIndex(const OString& table_name, const OString& body);
+    DropCollection(const OString& collection_name);
 
     StatusDto::ObjectWrapper
-    GetIndex(const OString& table_name, OString& result);
+    CreateIndex(const OString& collection_name, const OString& body);
 
     StatusDto::ObjectWrapper
-    DropIndex(const OString& table_name);
+    GetIndex(const OString& collection_name, OString& result);
 
     StatusDto::ObjectWrapper
-    CreatePartition(const OString& table_name, const PartitionRequestDto::ObjectWrapper& param);
+    DropIndex(const OString& collection_name);
 
     StatusDto::ObjectWrapper
-    ShowPartitions(const OString& table_name, const OQueryParams& query_params,
+    CreatePartition(const OString& collection_name, const PartitionRequestDto::ObjectWrapper& param);
+
+    StatusDto::ObjectWrapper
+    ShowPartitions(const OString& collection_name, const OQueryParams& query_params, const OString& body,
                    PartitionListDto::ObjectWrapper& partition_list_dto);
 
     StatusDto::ObjectWrapper
-    DropPartition(const OString& table_name, const OString& body);
+    DropPartition(const OString& collection_name, const OString& body);
 
     /***********
      *
      * Segment
      */
     StatusDto::ObjectWrapper
-    ShowSegments(const OString& table_name, const OQueryParams& query_params, OString& response);
+    ShowSegments(const OString& collection_name, const OQueryParams& query_params, OString& response);
 
     StatusDto::ObjectWrapper
-    GetSegmentInfo(const OString& table_name, const OString& segment_name, const OString& info,
+    GetSegmentInfo(const OString& collection_name, const OString& segment_name, const OString& info,
                    const OQueryParams& query_params, OString& result);
 
     /**
@@ -218,13 +217,19 @@ class WebRequestHandler {
      * Vector
      */
     StatusDto::ObjectWrapper
-    Insert(const OString& table_name, const OString& body, VectorIdsDto::ObjectWrapper& ids_dto);
+    Insert(const OString& collection_name, const OString& body, VectorIdsDto::ObjectWrapper& ids_dto);
 
     StatusDto::ObjectWrapper
-    GetVector(const OString& table_name, const OQueryParams& query_params, OString& response);
+    InsertEntity(const OString& collection_name, const OString& body, VectorIdsDto::ObjectWrapper& ids_dto);
 
     StatusDto::ObjectWrapper
-    VectorsOp(const OString& table_name, const OString& payload, OString& response);
+    GetEntity(const OString& collection_name, const OQueryParams& query_params, OString& response);
+
+    StatusDto::ObjectWrapper
+    GetVector(const OString& collection_name, const OQueryParams& query_params, OString& response);
+
+    StatusDto::ObjectWrapper
+    VectorsOp(const OString& collection_name, const OString& payload, OString& response);
 
     /**
      *
@@ -237,7 +242,7 @@ class WebRequestHandler {
     SystemOp(const OString& op, const OString& body_str, OString& response_str);
 
  public:
-    WebRequestHandler&
+    void
     RegisterRequestHandler(const RequestHandler& handler) {
         request_handler_ = handler;
     }
@@ -245,6 +250,8 @@ class WebRequestHandler {
  private:
     std::shared_ptr<Context> context_ptr_;
     RequestHandler request_handler_;
+    query::QueryPtr query_ptr_;
+    std::unordered_map<std::string, engine::meta::hybrid::DataType> field_type_;
 };
 
 }  // namespace web

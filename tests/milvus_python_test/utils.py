@@ -1,8 +1,8 @@
-# STL imports
+import os
+import sys
 import random
 import string
 import struct
-import sys
 import logging
 import time, datetime
 import copy
@@ -12,11 +12,26 @@ from milvus import Milvus, IndexType, MetricType
 port = 19530
 epsilon = 0.000001
 
+all_index_types = [
+    IndexType.FLAT,
+    IndexType.IVFLAT,
+    IndexType.IVF_SQ8,
+    IndexType.IVF_SQ8H,
+    IndexType.IVF_PQ,
+    IndexType.HNSW,
+    IndexType.RNSG,
+    IndexType.ANNOY
+]
 
-def get_milvus(handler=None):
+
+def get_milvus(host, port, uri=None, handler=None):
     if handler is None:
         handler = "GRPC"
-    return Milvus(handler=handler)
+    if uri is not None:
+        milvus = Milvus(uri=uri, handler=handler)
+    else:
+        milvus = Milvus(host=host, port=port, handler=handler)
+    return milvus
 
 
 def gen_inaccuracy(num):
@@ -66,6 +81,33 @@ def superstructure(x, y):
     y = np.asarray(y, np.bool)
     return 1 - np.double(np.bitwise_and(x, y).sum()) / np.count_nonzero(x)
 
+
+def gen_binary_sub_vectors(vectors, length):
+    raw_vectors = []
+    binary_vectors = []
+    dim = len(vectors[0])
+    for i in range(length):
+        raw_vector = [0 for i in range(dim)]
+        vector = vectors[i]
+        for index, j in enumerate(vector):
+            if j == 1:
+                raw_vector[index] = 1
+        raw_vectors.append(raw_vector)
+        binary_vectors.append(bytes(np.packbits(raw_vector, axis=-1).tolist()))
+    return raw_vectors, binary_vectors
+
+
+def gen_binary_super_vectors(vectors, length):
+    raw_vectors = []
+    binary_vectors = []
+    dim = len(vectors[0])
+    for i in range(length):
+        cnt_1 = np.count_nonzero(vectors[i])
+        raw_vector = [1 for i in range(dim)] 
+        raw_vectors.append(raw_vector)
+        binary_vectors.append(bytes(np.packbits(raw_vector, axis=-1).tolist()))
+    return raw_vectors, binary_vectors
+    
 
 def gen_single_vector(dim):
     return [[random.random() for _ in range(dim)]]
@@ -433,34 +475,31 @@ def gen_invalid_engine_config():
 
 
 def gen_invaild_search_params():
-    index_types = [
-        IndexType.FLAT,
-        IndexType.IVFLAT,
-        IndexType.IVF_SQ8,
-        IndexType.IVF_SQ8H,
-        IndexType.IVF_PQ,
-        IndexType.HNSW,
-        IndexType.RNSG
-    ]
-
+    invalid_search_key = 100
     search_params = []
-    for index_type in index_types:
+    for index_type in all_index_types:
+        if index_type == IndexType.FLAT:
+            continue
+        search_params.append({"index_type": index_type, "search_param": {"invalid_key": invalid_search_key}})
         if index_type in [IndexType.IVFLAT, IndexType.IVF_SQ8, IndexType.IVF_SQ8H, IndexType.IVF_PQ]:
             for nprobe in gen_invalid_params():
                 ivf_search_params = {"index_type": index_type, "search_param": {"nprobe": nprobe}}
                 search_params.append(ivf_search_params)
-            search_params.append({"index_type": index_type, "search_param": {"invalid_key": 100}})
         elif index_type == IndexType.HNSW:
             for ef in gen_invalid_params():
                 hnsw_search_param = {"index_type": index_type, "search_param": {"ef": ef}}
                 search_params.append(hnsw_search_param)
-            search_params.append({"index_type": index_type, "search_param": {"invalid_key": 100}})
         elif index_type == IndexType.RNSG:
             for search_length in gen_invalid_params():
                 nsg_search_param = {"index_type": index_type, "search_param": {"search_length": search_length}}
                 search_params.append(nsg_search_param)
             search_params.append({"index_type": index_type, "search_param": {"invalid_key": 100}})
-
+        elif index_type == IndexType.ANNOY:
+            for search_k in gen_invalid_params():
+                if isinstance(search_k, int):
+                    continue
+                annoy_search_param = {"index_type": index_type, "search_param": {"search_k": search_k}}
+                search_params.append(annoy_search_param)
     return search_params
 
 
@@ -498,20 +537,13 @@ def gen_invalid_index():
     index_params.append({"index_type": IndexType.RNSG,
                          "index_param": {"invalid_key": 100, "out_degree": 40, "candidate_pool_size": 300,
                                          "knng": 100}})
+    for invalid_n_trees in gen_invalid_params():
+        index_params.append({"index_type": IndexType.ANNOY, "index_param": {"n_trees": invalid_n_trees}})
+
     return index_params
 
 
 def gen_index():
-    index_types = [
-        IndexType.FLAT,
-        IndexType.IVFLAT,
-        IndexType.IVF_SQ8,
-        IndexType.IVF_SQ8H,
-        IndexType.IVF_PQ,
-        IndexType.HNSW,
-        IndexType.RNSG
-    ]
-
     nlists = [1, 1024, 16384]
     pq_ms = [128, 64, 32, 16, 8, 4]
     Ms = [5, 24, 48]
@@ -522,7 +554,7 @@ def gen_index():
     knngs = [5, 100, 300]
 
     index_params = []
-    for index_type in index_types:
+    for index_type in all_index_types:
         if index_type == IndexType.FLAT:
             index_params.append({"index_type": index_type, "index_param": {"nlist": 1024}})
         elif index_type in [IndexType.IVFLAT, IndexType.IVF_SQ8, IndexType.IVF_SQ8H]:
@@ -553,28 +585,19 @@ def gen_index():
 
 
 def gen_simple_index():
-    index_types = [
-        IndexType.FLAT,
-        IndexType.IVFLAT,
-        IndexType.IVF_SQ8,
-        IndexType.IVF_SQ8H,
-        IndexType.IVF_PQ,
-        IndexType.HNSW,
-        IndexType.RNSG
-    ]
     params = [
         {"nlist": 1024},
         {"nlist": 1024},
         {"nlist": 1024},
         {"nlist": 1024},
         {"nlist": 1024, "m": 16},
-        {"M": 16, "efConstruction": 500},
-        {"search_length": 50, "out_degree": 40, "candidate_pool_size": 100, "knng": 50}
+        {"M": 48, "efConstruction": 500},
+        {"search_length": 50, "out_degree": 40, "candidate_pool_size": 100, "knng": 50},
+        {"n_trees": 4}
     ]
-
     index_params = []
-    for i in range(len(index_types)):
-        index_params.append({"index_type": index_types[i], "index_param": params[i]})
+    for i in range(len(all_index_types)):
+        index_params.append({"index_type": all_index_types[i], "index_param": params[i]})
     return index_params
 
 
@@ -584,7 +607,10 @@ def get_search_param(index_type):
     elif index_type == IndexType.HNSW:
         return {"ef": 64}
     elif index_type == IndexType.RNSG:
-        return {"search_length": 50}
+        return {"search_length": 100}
+    elif index_type == IndexType.ANNOY:
+        return {"search_k": 100}
+
     else:
         logging.getLogger().info("Invalid index_type.")
 
@@ -599,3 +625,55 @@ def assert_equal_vector(v1, v2):
         assert False
     for i in range(len(v1)):
         assert abs(v1[i] - v2[i]) < epsilon
+
+
+def restart_server(helm_release_name):
+    res = True
+    timeout = 120
+    from kubernetes import client, config
+    client.rest.logger.setLevel(logging.WARNING)
+
+    namespace = "milvus"
+    # service_name = "%s.%s.svc.cluster.local" % (helm_release_name, namespace)
+    config.load_kube_config()
+    v1 = client.CoreV1Api()
+    pod_name = None
+    # config_map_names = v1.list_namespaced_config_map(namespace, pretty='true')
+    # body = {"replicas": 0}
+    pods = v1.list_namespaced_pod(namespace)
+    for i in pods.items:
+        if i.metadata.name.find(helm_release_name) != -1 and i.metadata.name.find("mysql") == -1:
+            pod_name = i.metadata.name
+            break
+            # v1.patch_namespaced_config_map(config_map_name, namespace, body, pretty='true')
+    # status_res = v1.read_namespaced_service_status(helm_release_name, namespace, pretty='true')
+    # print(status_res)
+    if pod_name is not None:
+        try:
+            v1.delete_namespaced_pod(pod_name, namespace)
+        except Exception as e:
+            logging.error(str(e))
+            logging.error("Exception when calling CoreV1Api->delete_namespaced_pod")
+            res = False
+            return res
+        time.sleep(5)
+        # check if restart successfully
+        pods = v1.list_namespaced_pod(namespace)
+        for i in pods.items:
+            pod_name_tmp = i.metadata.name
+            if pod_name_tmp.find(helm_release_name) != -1:
+                logging.debug(pod_name_tmp)
+                start_time = time.time()
+                while time.time() - start_time > timeout:
+                    status_res = v1.read_namespaced_pod_status(pod_name_tmp, namespace, pretty='true')
+                    if status_res.status.phase == "Running":
+                        break
+                    time.sleep(1)
+                if time.time() - start_time > timeout:
+                    logging.error("Restart pod: %s timeout" % pod_name_tmp)
+                    res = False
+                    return res
+    else:
+        logging.error("Pod: %s not found" % helm_release_name)
+        res = False
+    return res

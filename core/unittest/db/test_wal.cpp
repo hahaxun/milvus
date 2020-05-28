@@ -16,6 +16,7 @@
 #include <time.h>
 
 #include <fstream>
+#include <random>
 #include <sstream>
 #include <thread>
 
@@ -32,11 +33,13 @@ namespace {
 
 void
 MakeEmptyTestPath() {
+    pid_t ret;
     if (access(WAL_GTEST_PATH, 0) == 0) {
-        ::system("rm -rf " WAL_GTEST_PATH "*");
+        ret = ::system("rm -rf " WAL_GTEST_PATH "*");
     } else {
-        ::system("mkdir -m 777 -p " WAL_GTEST_PATH);
+        ret = ::system("mkdir -m 777 -p " WAL_GTEST_PATH);
     }
+    __glibcxx_assert(ret != -1);
 }
 
 } // namespace
@@ -51,13 +54,13 @@ class TestWalMeta : public SqliteMetaImpl {
     }
 
     Status
-    CreateTable(TableSchema& table_schema) override {
+    CreateCollection(CollectionSchema& table_schema) override {
         tables_.push_back(table_schema);
         return Status::OK();
     }
 
     Status
-    AllTables(std::vector<TableSchema>& table_schema_array) override {
+    AllCollections(std::vector<CollectionSchema>& table_schema_array) override {
         table_schema_array = tables_;
         return Status::OK();
     }
@@ -75,7 +78,7 @@ class TestWalMeta : public SqliteMetaImpl {
     }
 
  private:
-    std::vector<TableSchema> tables_;
+    std::vector<CollectionSchema> tables_;
     uint64_t global_lsn_ = 0;
 };
 
@@ -85,7 +88,7 @@ class TestWalMetaError : public SqliteMetaImpl {
     }
 
     Status
-    AllTables(std::vector<TableSchema>& table_schema_array) override {
+    AllCollections(std::vector<CollectionSchema>& table_schema_array) override {
         return Status(DB_ERROR, "error");
     }
 };
@@ -273,7 +276,7 @@ TEST(WalTest, BUFFER_TEST) {
 
     // write 0
     record[0].type = milvus::engine::wal::MXLogType::InsertVector;
-    record[0].table_id = "insert_table";
+    record[0].collection_id = "insert_table";
     record[0].partition_tag = "parti1";
     record[0].length = 50;
     record[0].ids = (milvus::engine::IDNumber*)malloc(record[0].length * sizeof(milvus::engine::IDNumber));
@@ -285,7 +288,7 @@ TEST(WalTest, BUFFER_TEST) {
 
     // write 1
     record[1].type = milvus::engine::wal::MXLogType::Delete;
-    record[1].table_id = "insert_table";
+    record[1].collection_id = "insert_table";
     record[1].partition_tag = "parti1";
     record[1].length = 10;
     record[1].ids = (milvus::engine::IDNumber*)malloc(record[0].length * sizeof(milvus::engine::IDNumber));
@@ -298,7 +301,7 @@ TEST(WalTest, BUFFER_TEST) {
     // read 0
     ASSERT_EQ(buffer.Next(record[1].lsn, read_rst), milvus::WAL_SUCCESS);
     ASSERT_EQ(read_rst.type, record[0].type);
-    ASSERT_EQ(read_rst.table_id, record[0].table_id);
+    ASSERT_EQ(read_rst.collection_id, record[0].collection_id);
     ASSERT_EQ(read_rst.partition_tag, record[0].partition_tag);
     ASSERT_EQ(read_rst.length, record[0].length);
     ASSERT_EQ(memcmp(read_rst.ids, record[0].ids, read_rst.length * sizeof(milvus::engine::IDNumber)), 0);
@@ -308,7 +311,7 @@ TEST(WalTest, BUFFER_TEST) {
     // read 1
     ASSERT_EQ(buffer.Next(record[1].lsn, read_rst), milvus::WAL_SUCCESS);
     ASSERT_EQ(read_rst.type, record[1].type);
-    ASSERT_EQ(read_rst.table_id, record[1].table_id);
+    ASSERT_EQ(read_rst.collection_id, record[1].collection_id);
     ASSERT_EQ(read_rst.partition_tag, record[1].partition_tag);
     ASSERT_EQ(read_rst.length, record[1].length);
     ASSERT_EQ(memcmp(read_rst.ids, record[1].ids, read_rst.length * sizeof(milvus::engine::IDNumber)), 0);
@@ -321,7 +324,7 @@ TEST(WalTest, BUFFER_TEST) {
 
     // write 2 (new file)
     record[2].type = milvus::engine::wal::MXLogType::InsertVector;
-    record[2].table_id = "insert_table";
+    record[2].collection_id = "insert_table";
     record[2].partition_tag = "parti1";
     record[2].length = 50;
     record[2].ids = (milvus::engine::IDNumber*)malloc(record[2].length * sizeof(milvus::engine::IDNumber));
@@ -333,7 +336,7 @@ TEST(WalTest, BUFFER_TEST) {
 
     // write 3 (new file)
     record[3].type = milvus::engine::wal::MXLogType::InsertBinary;
-    record[3].table_id = "insert_table";
+    record[3].collection_id = "insert_table";
     record[3].partition_tag = "parti1";
     record[3].length = 100;
     record[3].ids = (milvus::engine::IDNumber*)malloc(record[3].length * sizeof(milvus::engine::IDNumber));
@@ -355,7 +358,7 @@ TEST(WalTest, BUFFER_TEST) {
     // read 2
     ASSERT_EQ(buffer.Next(record[3].lsn, read_rst), milvus::WAL_SUCCESS);
     ASSERT_EQ(read_rst.type, record[2].type);
-    ASSERT_EQ(read_rst.table_id, record[2].table_id);
+    ASSERT_EQ(read_rst.collection_id, record[2].collection_id);
     ASSERT_EQ(read_rst.partition_tag, record[2].partition_tag);
     ASSERT_EQ(read_rst.length, record[2].length);
     ASSERT_EQ(memcmp(read_rst.ids, record[2].ids, read_rst.length * sizeof(milvus::engine::IDNumber)), 0);
@@ -365,7 +368,7 @@ TEST(WalTest, BUFFER_TEST) {
     // read 3
     ASSERT_EQ(buffer.Next(record[3].lsn, read_rst), milvus::WAL_SUCCESS);
     ASSERT_EQ(read_rst.type, record[3].type);
-    ASSERT_EQ(read_rst.table_id, record[3].table_id);
+    ASSERT_EQ(read_rst.collection_id, record[3].collection_id);
     ASSERT_EQ(read_rst.partition_tag, record[3].partition_tag);
     ASSERT_EQ(read_rst.length, record[3].length);
     ASSERT_EQ(memcmp(read_rst.ids, record[3].ids, read_rst.length * sizeof(milvus::engine::IDNumber)), 0);
@@ -380,7 +383,255 @@ TEST(WalTest, BUFFER_TEST) {
     ASSERT_EQ(buffer.Append(empty), milvus::WAL_SUCCESS);
     ASSERT_EQ(buffer.Next(empty.lsn, read_rst), milvus::WAL_SUCCESS);
     ASSERT_EQ(read_rst.type, milvus::engine::wal::MXLogType::None);
-    ASSERT_TRUE(read_rst.table_id.empty());
+    ASSERT_TRUE(read_rst.collection_id.empty());
+    ASSERT_TRUE(read_rst.partition_tag.empty());
+    ASSERT_EQ(read_rst.length, 0);
+    ASSERT_EQ(read_rst.data_size, 0);
+
+    // remove old files
+    buffer.RemoveOldFiles(record[3].lsn);
+    ASSERT_EQ(buffer.file_no_from_, file_no);
+
+    // clear writen lsn and reset failed
+    buffer.mxlog_buffer_writer_.file_no = 0;
+    buffer.mxlog_buffer_writer_.buf_offset = 0;
+    ASSERT_FALSE(buffer.ResetWriteLsn(record[1].lsn));
+
+    // clear writen lsn and reset failed
+    FILE *fi = fopen(WAL_GTEST_PATH "5.wal", "w");
+    fclose(fi);
+    buffer.mxlog_buffer_writer_.file_no = 0;
+    buffer.mxlog_buffer_writer_.buf_offset = 0;
+    ASSERT_FALSE(buffer.ResetWriteLsn(record[1].lsn));
+
+    for (int i = 0; i < 3; i++) {
+        if (record[i].ids != nullptr) {
+            free((void*)record[i].ids);
+        }
+        if (record[i].data != nullptr) {
+            free((void*)record[i].data);
+        }
+    }
+}
+
+TEST(WalTest, HYBRID_BUFFFER_TEST) {
+    MakeEmptyTestPath();
+
+    milvus::engine::wal::MXLogBuffer buffer(WAL_GTEST_PATH, 2048);
+
+    uint32_t file_no = 4;
+    uint32_t buf_off = 100;
+    uint64_t lsn = (uint64_t)file_no << 32 | buf_off;
+    buffer.mxlog_buffer_size_ = 2000;
+    buffer.Reset(lsn);
+
+    milvus::engine::wal::MXLogRecord record[4];
+    milvus::engine::wal::MXLogRecord read_rst;
+
+    // write 0
+    record[0].type = milvus::engine::wal::MXLogType::Entity;
+    record[0].collection_id = "insert_hybrid_collection";
+    record[0].partition_tag = "parti1";
+    uint64_t length = 50;
+    record[0].length = length;
+    record[0].ids = (milvus::engine::IDNumber*)malloc(record[0].length * sizeof(milvus::engine::IDNumber));
+    record[0].data_size = record[0].length * sizeof(float);
+    record[0].data = malloc(record[0].data_size);
+    record[0].field_names.resize(2);
+    record[0].field_names[0] = "field_0";
+    record[0].field_names[1] = "field_1";
+    record[0].attr_data_size.insert(std::make_pair("field_0", length * sizeof(int64_t)));
+    record[0].attr_data_size.insert(std::make_pair("field_1", length * sizeof(float)));
+    record[0].attr_nbytes.insert(std::make_pair("field_0", sizeof(uint64_t)));
+    record[0].attr_nbytes.insert(std::make_pair("field_1", sizeof(float)));
+
+    std::vector<int64_t> data_0(length);
+    std::default_random_engine e;
+    std::uniform_int_distribution<unsigned> u(0, 1000);
+    for (uint64_t i = 0; i < length; ++i) {
+        data_0[i] = u(e);
+    }
+    std::vector<uint8_t> attr_data_0(length * sizeof(int64_t));
+    memcpy(attr_data_0.data(), data_0.data(), length * sizeof(int64_t));
+    record[0].attr_data.insert(std::make_pair("field_0", attr_data_0));
+
+    std::vector<float> data_1(length);
+    std::default_random_engine e1;
+    std::uniform_real_distribution<float> u1(0, 1);
+    for (uint64_t i = 0; i < length; ++i) {
+        data_1[i] = u1(e1);
+    }
+    std::vector<uint8_t> attr_data_1(length * sizeof(float));
+    memcpy(attr_data_1.data(), data_1.data(), length * sizeof(float));
+    record[0].attr_data.insert(std::make_pair("field_1", attr_data_1));
+
+    ASSERT_EQ(buffer.AppendEntity(record[0]), milvus::WAL_SUCCESS);
+    uint32_t new_file_no = uint32_t(record[0].lsn >> 32);
+    ASSERT_EQ(new_file_no, ++file_no);
+
+    // write 1
+    record[1].type = milvus::engine::wal::MXLogType::Delete;
+    record[1].collection_id = "insert_hybrid_collection";
+    record[1].partition_tag = "parti1";
+    length = 10;
+    record[1].length = length;
+    record[1].ids = (milvus::engine::IDNumber*)malloc(record[0].length * sizeof(milvus::engine::IDNumber));
+    record[1].data_size = 0;
+    record[1].data = nullptr;
+    record[1].field_names.resize(2);
+    record[1].field_names[0] = "field_0";
+    record[1].field_names[1] = "field_1";
+    record[1].attr_data_size.insert(std::make_pair("field_0", length * sizeof(int64_t)));
+    record[1].attr_data_size.insert(std::make_pair("field_1", length * sizeof(float)));
+    record[1].attr_nbytes.insert(std::make_pair("field_0", sizeof(uint64_t)));
+    record[1].attr_nbytes.insert(std::make_pair("field_1", sizeof(float)));
+
+    std::vector<int64_t> data1_0(length);
+    for (uint64_t i = 0; i < length; ++i) {
+        data_0[i] = u(e);
+    }
+    std::vector<uint8_t> attr_data1_0(length * sizeof(int64_t));
+    memcpy(attr_data1_0.data(), data1_0.data(), length * sizeof(int64_t));
+    record[1].attr_data.insert(std::make_pair("field_0", attr_data1_0));
+
+    std::vector<float> data1_1(length);
+    for (uint64_t i = 0; i < length; ++i) {
+        data_1[i] = u1(e1);
+    }
+    std::vector<uint8_t> attr_data1_1(length * sizeof(float));
+    memcpy(attr_data1_1.data(), data1_1.data(), length * sizeof(float));
+    record[1].attr_data.insert(std::make_pair("field_1", attr_data1_1));
+    ASSERT_EQ(buffer.AppendEntity(record[1]), milvus::WAL_SUCCESS);
+    new_file_no = uint32_t(record[1].lsn >> 32);
+    ASSERT_EQ(new_file_no, file_no);
+
+    // read 0
+    ASSERT_EQ(buffer.NextEntity(record[1].lsn, read_rst), milvus::WAL_SUCCESS);
+    ASSERT_EQ(read_rst.type, record[0].type);
+    ASSERT_EQ(read_rst.collection_id, record[0].collection_id);
+    ASSERT_EQ(read_rst.partition_tag, record[0].partition_tag);
+    ASSERT_EQ(read_rst.length, record[0].length);
+    ASSERT_EQ(memcmp(read_rst.ids, record[0].ids, read_rst.length * sizeof(milvus::engine::IDNumber)), 0);
+    ASSERT_EQ(read_rst.data_size, record[0].data_size);
+    ASSERT_EQ(memcmp(read_rst.data, record[0].data, read_rst.data_size), 0);
+    ASSERT_EQ(read_rst.field_names.size(), record[0].field_names.size());
+    ASSERT_EQ(read_rst.field_names[0], record[0].field_names[0]);
+    ASSERT_EQ(read_rst.attr_data.at("field_0").size(), record[0].attr_data.at("field_0").size());
+    ASSERT_EQ(read_rst.attr_nbytes.at("field_0"), record[0].attr_nbytes.at("field_0"));
+
+    // read 1
+    ASSERT_EQ(buffer.NextEntity(record[1].lsn, read_rst), milvus::WAL_SUCCESS);
+    ASSERT_EQ(read_rst.type, record[1].type);
+    ASSERT_EQ(read_rst.collection_id, record[1].collection_id);
+    ASSERT_EQ(read_rst.partition_tag, record[1].partition_tag);
+    ASSERT_EQ(read_rst.length, record[1].length);
+    ASSERT_EQ(memcmp(read_rst.ids, record[1].ids, read_rst.length * sizeof(milvus::engine::IDNumber)), 0);
+    ASSERT_EQ(read_rst.data_size, 0);
+    ASSERT_EQ(read_rst.data, nullptr);
+    ASSERT_EQ(read_rst.field_names.size(), record[1].field_names.size());
+    ASSERT_EQ(read_rst.field_names[1], record[1].field_names[1]);
+    ASSERT_EQ(read_rst.attr_data.at("field_1").size(), record[1].attr_data.at("field_1").size());
+    ASSERT_EQ(read_rst.attr_nbytes.at("field_0"), record[1].attr_nbytes.at("field_0"));
+
+    // read empty
+    ASSERT_EQ(buffer.NextEntity(record[1].lsn, read_rst), milvus::WAL_SUCCESS);
+    ASSERT_EQ(read_rst.type, milvus::engine::wal::MXLogType::None);
+
+    // write 2 (new file)
+    record[2].type = milvus::engine::wal::MXLogType::Entity;
+    record[2].collection_id = "insert_table";
+    record[2].partition_tag = "parti1";
+    length = 50;
+    record[2].length = length;
+    record[2].ids = (milvus::engine::IDNumber*)malloc(record[2].length * sizeof(milvus::engine::IDNumber));
+    record[2].data_size = record[2].length * sizeof(float);
+    record[2].data = malloc(record[2].data_size);
+
+    record[2].field_names.resize(2);
+    record[2].field_names[0] = "field_0";
+    record[2].field_names[1] = "field_1";
+    record[2].attr_data_size.insert(std::make_pair("field_0", length * sizeof(int64_t)));
+    record[2].attr_data_size.insert(std::make_pair("field_1", length * sizeof(float)));
+
+    record[2].attr_data.insert(std::make_pair("field_0", attr_data_0));
+    record[2].attr_data.insert(std::make_pair("field_1", attr_data_1));
+    record[2].attr_nbytes.insert(std::make_pair("field_0", sizeof(uint64_t)));
+    record[2].attr_nbytes.insert(std::make_pair("field_1", sizeof(float)));
+
+    ASSERT_EQ(buffer.AppendEntity(record[2]), milvus::WAL_SUCCESS);
+    new_file_no = uint32_t(record[2].lsn >> 32);
+    ASSERT_EQ(new_file_no, ++file_no);
+
+    // write 3 (new file)
+    record[3].type = milvus::engine::wal::MXLogType::Entity;
+    record[3].collection_id = "insert_table";
+    record[3].partition_tag = "parti1";
+    record[3].length = 10;
+    record[3].ids = (milvus::engine::IDNumber*)malloc(record[3].length * sizeof(milvus::engine::IDNumber));
+    record[3].data_size = record[3].length * sizeof(uint8_t);
+    record[3].data = malloc(record[3].data_size);
+
+    record[3].field_names.resize(2);
+    record[3].field_names[0] = "field_0";
+    record[3].field_names[1] = "field_1";
+    record[3].attr_data_size.insert(std::make_pair("field_0", length * sizeof(int64_t)));
+    record[3].attr_data_size.insert(std::make_pair("field_1", length * sizeof(float)));
+
+    record[3].attr_data.insert(std::make_pair("field_0", attr_data1_0));
+    record[3].attr_data.insert(std::make_pair("field_1", attr_data1_1));
+    record[3].attr_nbytes.insert(std::make_pair("field_0", sizeof(uint64_t)));
+    record[3].attr_nbytes.insert(std::make_pair("field_1", sizeof(float)));
+    ASSERT_EQ(buffer.AppendEntity(record[3]), milvus::WAL_SUCCESS);
+    new_file_no = uint32_t(record[3].lsn >> 32);
+    ASSERT_EQ(new_file_no, ++file_no);
+
+    // reset write lsn (record 2)
+    ASSERT_TRUE(buffer.ResetWriteLsn(record[3].lsn));
+    ASSERT_TRUE(buffer.ResetWriteLsn(record[2].lsn));
+    ASSERT_TRUE(buffer.ResetWriteLsn(record[1].lsn));
+
+    // write 2 and 3 again
+    ASSERT_EQ(buffer.AppendEntity(record[2]), milvus::WAL_SUCCESS);
+    ASSERT_EQ(buffer.AppendEntity(record[3]), milvus::WAL_SUCCESS);
+
+    // read 2
+    ASSERT_EQ(buffer.NextEntity(record[3].lsn, read_rst), milvus::WAL_SUCCESS);
+    ASSERT_EQ(read_rst.type, record[2].type);
+    ASSERT_EQ(read_rst.collection_id, record[2].collection_id);
+    ASSERT_EQ(read_rst.partition_tag, record[2].partition_tag);
+    ASSERT_EQ(read_rst.length, record[2].length);
+    ASSERT_EQ(memcmp(read_rst.ids, record[2].ids, read_rst.length * sizeof(milvus::engine::IDNumber)), 0);
+    ASSERT_EQ(read_rst.data_size, record[2].data_size);
+    ASSERT_EQ(memcmp(read_rst.data, record[2].data, read_rst.data_size), 0);
+
+    ASSERT_EQ(read_rst.field_names.size(), record[2].field_names.size());
+    ASSERT_EQ(read_rst.field_names[1], record[2].field_names[1]);
+    ASSERT_EQ(read_rst.attr_data.at("field_1").size(), record[2].attr_data.at("field_1").size());
+    ASSERT_EQ(read_rst.attr_nbytes.at("field_0"), record[2].attr_nbytes.at("field_0"));
+
+    // read 3
+    ASSERT_EQ(buffer.NextEntity(record[3].lsn, read_rst), milvus::WAL_SUCCESS);
+    ASSERT_EQ(read_rst.type, record[3].type);
+    ASSERT_EQ(read_rst.collection_id, record[3].collection_id);
+    ASSERT_EQ(read_rst.partition_tag, record[3].partition_tag);
+    ASSERT_EQ(read_rst.length, record[3].length);
+    ASSERT_EQ(memcmp(read_rst.ids, record[3].ids, read_rst.length * sizeof(milvus::engine::IDNumber)), 0);
+    ASSERT_EQ(read_rst.data_size, record[3].data_size);
+    ASSERT_EQ(memcmp(read_rst.data, record[3].data, read_rst.data_size), 0);
+
+    ASSERT_EQ(read_rst.field_names.size(), record[3].field_names.size());
+    ASSERT_EQ(read_rst.field_names[1], record[3].field_names[1]);
+    ASSERT_EQ(read_rst.attr_nbytes.at("field_0"), record[3].attr_nbytes.at("field_0"));
+
+    // test an empty record
+    milvus::engine::wal::MXLogRecord empty;
+    empty.type = milvus::engine::wal::MXLogType::None;
+    empty.length = 0;
+    empty.data_size = 0;
+    ASSERT_EQ(buffer.AppendEntity(empty), milvus::WAL_SUCCESS);
+    ASSERT_EQ(buffer.NextEntity(empty.lsn, read_rst), milvus::WAL_SUCCESS);
+    ASSERT_EQ(read_rst.type, milvus::engine::wal::MXLogType::None);
+    ASSERT_TRUE(read_rst.collection_id.empty());
     ASSERT_TRUE(read_rst.partition_tag.empty());
     ASSERT_EQ(read_rst.length, 0);
     ASSERT_EQ(read_rst.data_size, 0);
@@ -417,20 +668,20 @@ TEST(WalTest, MANAGER_INIT_TEST) {
     milvus::engine::DBMetaOptions opt = {WAL_GTEST_PATH};
     milvus::engine::meta::MetaPtr meta = std::make_shared<milvus::engine::meta::TestWalMeta>(opt);
 
-    milvus::engine::meta::TableSchema table_schema_1;
-    table_schema_1.table_id_ = "table1";
+    milvus::engine::meta::CollectionSchema table_schema_1;
+    table_schema_1.collection_id_ = "table1";
     table_schema_1.flush_lsn_ = (uint64_t)1 << 32 | 60;
-    meta->CreateTable(table_schema_1);
+    meta->CreateCollection(table_schema_1);
 
-    milvus::engine::meta::TableSchema table_schema_2;
-    table_schema_2.table_id_ = "table2";
+    milvus::engine::meta::CollectionSchema table_schema_2;
+    table_schema_2.collection_id_ = "table2";
     table_schema_2.flush_lsn_ = (uint64_t)1 << 32 | 20;
-    meta->CreateTable(table_schema_2);
+    meta->CreateCollection(table_schema_2);
 
-    milvus::engine::meta::TableSchema table_schema_3;
-    table_schema_3.table_id_ = "table3";
+    milvus::engine::meta::CollectionSchema table_schema_3;
+    table_schema_3.collection_id_ = "table3";
     table_schema_3.flush_lsn_ = (uint64_t)2 << 32 | 40;
-    meta->CreateTable(table_schema_3);
+    meta->CreateCollection(table_schema_3);
 
     milvus::engine::wal::MXLogConfiguration wal_config;
     wal_config.mxlog_path = WAL_GTEST_PATH;
@@ -463,10 +714,10 @@ TEST(WalTest, MANAGER_APPEND_FAILED) {
     milvus::engine::DBMetaOptions opt = {WAL_GTEST_PATH};
     milvus::engine::meta::MetaPtr meta = std::make_shared<milvus::engine::meta::TestWalMeta>(opt);
 
-    milvus::engine::meta::TableSchema schema;
-    schema.table_id_ = "table1";
+    milvus::engine::meta::CollectionSchema schema;
+    schema.collection_id_ = "table1";
     schema.flush_lsn_ = 0;
-    meta->CreateTable(schema);
+    meta->CreateCollection(schema);
 
     milvus::engine::wal::MXLogConfiguration wal_config;
     wal_config.mxlog_path = WAL_GTEST_PATH;
@@ -483,12 +734,12 @@ TEST(WalTest, MANAGER_APPEND_FAILED) {
 
     std::vector<int64_t> ids(1, 0);
     std::vector<float> data_float(1024, 0);
-    ASSERT_FALSE(manager->Insert(schema.table_id_, "", ids, data_float));
+    ASSERT_FALSE(manager->Insert(schema.collection_id_, "", ids, data_float));
 
     ids.clear();
     data_float.clear();
-    ASSERT_FALSE(manager->Insert(schema.table_id_, "", ids, data_float));
-    ASSERT_FALSE(manager->DeleteById(schema.table_id_, ids));
+    ASSERT_FALSE(manager->Insert(schema.collection_id_, "", ids, data_float));
+    ASSERT_FALSE(manager->DeleteById(schema.collection_id_, ids));
 }
 
 TEST(WalTest, MANAGER_RECOVERY_TEST) {
@@ -506,15 +757,15 @@ TEST(WalTest, MANAGER_RECOVERY_TEST) {
     manager = std::make_shared<milvus::engine::wal::WalManager>(wal_config);
     ASSERT_EQ(manager->Init(meta), milvus::WAL_SUCCESS);
 
-    milvus::engine::meta::TableSchema schema;
-    schema.table_id_ = "table";
+    milvus::engine::meta::CollectionSchema schema;
+    schema.collection_id_ = "collection";
     schema.flush_lsn_ = 0;
-    meta->CreateTable(schema);
+    meta->CreateCollection(schema);
 
     std::vector<int64_t> ids(1024, 0);
     std::vector<float> data_float(1024 * 512, 0);
-    manager->CreateTable(schema.table_id_);
-    ASSERT_TRUE(manager->Insert(schema.table_id_, "", ids, data_float));
+    manager->CreateCollection(schema.collection_id_);
+    ASSERT_TRUE(manager->Insert(schema.collection_id_, "", ids, data_float));
 
     // recovery
     manager = std::make_shared<milvus::engine::wal::WalManager>(wal_config);
@@ -527,7 +778,7 @@ TEST(WalTest, MANAGER_RECOVERY_TEST) {
             break;
         }
         ASSERT_EQ(record.type, milvus::engine::wal::MXLogType::InsertVector);
-        ASSERT_EQ(record.table_id, schema.table_id_);
+        ASSERT_EQ(record.collection_id, schema.collection_id_);
         ASSERT_EQ(record.partition_tag, "");
     }
 
@@ -576,12 +827,12 @@ TEST(WalTest, MANAGER_TEST) {
 
     // table1 create and insert
     std::string table_id_1 = "table1";
-    manager->CreateTable(table_id_1);
+    manager->CreateCollection(table_id_1);
     ASSERT_TRUE(manager->Insert(table_id_1, "", ids, data_float));
 
     // table2 create and insert
     std::string table_id_2 = "table2";
-    manager->CreateTable(table_id_2);
+    manager->CreateCollection(table_id_2);
     ASSERT_TRUE(manager->Insert(table_id_2, "", ids, data_byte));
 
     // table1 delete
@@ -589,7 +840,7 @@ TEST(WalTest, MANAGER_TEST) {
 
     // table3 create and insert
     std::string table_id_3 = "table3";
-    manager->CreateTable(table_id_3);
+    manager->CreateCollection(table_id_3);
     ASSERT_TRUE(manager->Insert(table_id_3, "", ids, data_float));
 
     // flush table1
@@ -602,18 +853,18 @@ TEST(WalTest, MANAGER_TEST) {
     while (1) {
         ASSERT_EQ(manager->GetNextRecord(record), milvus::WAL_SUCCESS);
         if (record.type == milvus::engine::wal::MXLogType::Flush) {
-            ASSERT_EQ(record.table_id, table_id_1);
+            ASSERT_EQ(record.collection_id, table_id_1);
             ASSERT_EQ(new_lsn, flush_lsn);
-            manager->TableFlushed(table_id_1, new_lsn);
+            manager->CollectionFlushed(table_id_1, new_lsn);
             break;
 
         } else {
             ASSERT_TRUE((record.type == milvus::engine::wal::MXLogType::InsertVector &&
-                             record.table_id == table_id_1) ||
+                             record.collection_id == table_id_1) ||
                         (record.type == milvus::engine::wal::MXLogType::Delete &&
-                             record.table_id == table_id_1) ||
+                             record.collection_id == table_id_1) ||
                         (record.type == milvus::engine::wal::MXLogType::InsertBinary &&
-                             record.table_id == table_id_2));
+                             record.collection_id == table_id_2));
             new_lsn = record.lsn;
         }
     }
@@ -624,20 +875,20 @@ TEST(WalTest, MANAGER_TEST) {
 
     ASSERT_EQ(manager->GetNextRecord(record), milvus::WAL_SUCCESS);
     ASSERT_EQ(record.type, milvus::engine::wal::MXLogType::Flush);
-    ASSERT_EQ(record.table_id, table_id_2);
-    manager->TableFlushed(table_id_2, flush_lsn);
+    ASSERT_EQ(record.collection_id, table_id_2);
+    manager->CollectionFlushed(table_id_2, flush_lsn);
     ASSERT_EQ(manager->Flush(table_id_2), 0);
 
     flush_lsn = manager->Flush();
     ASSERT_NE(flush_lsn, 0);
-    manager->DropTable(table_id_3);
+    manager->DropCollection(table_id_3);
 
     ASSERT_EQ(manager->GetNextRecord(record), milvus::WAL_SUCCESS);
     ASSERT_EQ(record.type, milvus::engine::wal::MXLogType::Flush);
-    ASSERT_TRUE(record.table_id.empty());
+    ASSERT_TRUE(record.collection_id.empty());
 }
 
-TEST(WalTest, MANAGER_SAME_NAME_TABLE) {
+TEST(WalTest, MANAGER_SAME_NAME_COLLECTION) {
     MakeEmptyTestPath();
 
     milvus::engine::DBMetaOptions opt = {WAL_GTEST_PATH};
@@ -663,8 +914,8 @@ TEST(WalTest, MANAGER_SAME_NAME_TABLE) {
     std::vector<uint8_t> data_byte(1024 * 512, 0);
 
     // create 2 tables
-    manager->CreateTable(table_id_1);
-    manager->CreateTable(table_id_2);
+    manager->CreateCollection(table_id_1);
+    manager->CreateCollection(table_id_2);
 
     // command
     ASSERT_TRUE(manager->Insert(table_id_1, "", ids, data_byte));
@@ -672,9 +923,9 @@ TEST(WalTest, MANAGER_SAME_NAME_TABLE) {
     ASSERT_TRUE(manager->DeleteById(table_id_1, ids));
     ASSERT_TRUE(manager->DeleteById(table_id_2, ids));
 
-    // re-create table
-    manager->DropTable(table_id_1);
-    manager->CreateTable(table_id_1);
+    // re-create collection
+    manager->DropCollection(table_id_1);
+    manager->CreateCollection(table_id_1);
 
     milvus::engine::wal::MXLogRecord record;
     while (1) {
@@ -682,7 +933,7 @@ TEST(WalTest, MANAGER_SAME_NAME_TABLE) {
         if (record.type == milvus::engine::wal::MXLogType::None) {
             break;
         }
-        ASSERT_EQ(record.table_id, table_id_2);
+        ASSERT_EQ(record.collection_id, table_id_2);
     }
 }
 
